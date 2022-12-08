@@ -1,0 +1,29 @@
+{
+  "name": "cuss2-tests",
+  "version": "1.0.0",
+  "description": "A suite of tests to validate compliance with the CUSS2 spec",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elevationsoftware/cuss2-tests.git"
+  },
+  "keywords": [
+    "CUSS2"
+  ],
+  "author": "William Kapke",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/elevationsoftware/cuss2-tests/issues"
+  },
+  "homepage": "https://github.com/elevationsoftware/cuss2-tests#readme",
+  "dependencies": {
+    "chai": "^4.3.6",
+    "mocha": "^10.0.0",
+    "uuid": "^9.0.0",
+    "ws": "^8.9.0"
+  }
+}
