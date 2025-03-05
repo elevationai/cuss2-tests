@@ -1,10 +1,4 @@
 import {validateComponent} from "../componentValidation.js";
-import {
-  ApplicationState,
-  ApplicationStateCodes,
-  PlatformDirectives,
-  StatusCodes
-} from "cuss2-javascript-models";
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
 
@@ -13,6 +7,7 @@ import {expect} from 'chai'
 import config from "../config.js";
 import {Connection} from "../Connection.js";
 import {Build, callAndDoBaselineValidation} from "../helper.js";
+import {MessageCodes, PlatformDirectives} from "../cuss2-js-models/models/index.js";
 
 describe('Directive Calls', function () {
   let conn
@@ -28,7 +23,7 @@ describe('Directive Calls', function () {
   });
 
   it('should return `platformComponents` data', async function () {
-    const ad = Build.applicationData(PlatformDirectives.platformComponents)
+    const ad = Build.applicationData(PlatformDirectives.PlatformComponents)
     const res = await callAndDoBaselineValidation(conn, ad)
     const componentList = res.payload.componentList
     expect(componentList).to.exist
@@ -39,14 +34,14 @@ describe('Directive Calls', function () {
   });
 
   it('should require a componentId for `peripheralsQuery`', async function () {
-    const ad = Build.applicationData(PlatformDirectives.peripheralsQuery)
+    const ad = Build.applicationData(PlatformDirectives.PeripheralsQuery)
     await callAndDoBaselineValidation(conn, ad, {
-      status: StatusCodes.DATA_MISSING
+      status: MessageCodes.DATAMISSING
     })
   });
 
   it('should return `peripheralsQuery` data', async function () {
-    const ad = Build.applicationData(PlatformDirectives.peripheralsQuery, {componentID:0})
+    const ad = Build.applicationData(PlatformDirectives.PeripheralsQuery, {componentID:0})
     await callAndDoBaselineValidation(conn, ad)
   });
 });

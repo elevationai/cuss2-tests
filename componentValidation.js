@@ -1,4 +1,4 @@
-import {ComponentTypes, CUSSDataTypes, DeviceTypes, MediaTypes} from "cuss2-javascript-models";
+import {ComponentTypes, CUSSDataTypes, DeviceTypes, MediaTypes} from "cuss2-typescript-models";
 import {expect} from 'chai'
 
 export const validateComponent = (component) => {

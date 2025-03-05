@@ -1,8 +1,9 @@
 import WebSocket from 'ws'
 
 import EventEmitter from 'events'
-import {ApplicationData, PlatformDirectives} from "cuss2-javascript-models"
 import {Build} from "./helper.js"
+import {ApplicationData} from './cuss2-js-models/models/index.js';
+import {PlatformDirectives} from "./cuss2-js-models/models/index.js";
 
 // const log = console.log
 const log = () => {}
@@ -154,7 +155,7 @@ export class Connection extends EventEmitter {
   }
 
   getEnvironmentData() {
-    const ad = Build.applicationData(PlatformDirectives.platformEnvironment)
+    const ad = Build.applicationData(PlatformDirectives.PlatformEnvironment)
     return this.sendAndGetResponse(ad)
   }
 

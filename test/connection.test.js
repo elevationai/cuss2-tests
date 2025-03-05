@@ -1,5 +1,6 @@
+import {PlatformDirectives} from "../cuss2-js-models/models/index.js";
+
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
-import {PlatformDirectives} from "cuss2-javascript-models";
 
 import {expect} from 'chai'
 import config from "../config.js";
@@ -48,7 +49,7 @@ describe('The WebSocket connection', function () {
       conn.waitFor('close').then((e) => {
         expect(e.code).to.eq(4003)
       }),
-      conn.send(Build.applicationData(PlatformDirectives.platformComponents))
+      conn.send(Build.applicationData(PlatformDirectives.PlatformComponents))
     ])
   });
 
@@ -57,16 +58,22 @@ describe('The WebSocket connection', function () {
       conn.waitFor('close').then((e) => {
         expect(e.code).to.eq(4004)
       }),
-      conn.send(Build.applicationData(PlatformDirectives.platformEnvironment, {token: 'WRONG'}))
+      conn.send(Build.applicationData(PlatformDirectives.PlatformEnvironment, {oauthToken: 'WRONG'}))
     ])
   });
 
+  it('should close the connection and return 4006 if the tenant is DISABLED', async function () {
+    const conn2 = await Connection.connect(config.server_url, 'DDD', 'DISABLED_TENANT', config.oauth_url)
+    const closeEvent = await conn2.getEnvironmentData().catch(closeEvent => closeEvent) // required first call
+    conn2.close(4999, 'Test Complete')
+    expect(closeEvent.code).to.eq(4006)
+  });
+
   it('should acknowledge and return the EnvironmentData', async function () {
-    const ad = Build.applicationData(PlatformDirectives.platformEnvironment)
+    const ad = Build.applicationData(PlatformDirectives.PlatformEnvironment)
     const res = await callAndDoBaselineValidation(conn, ad)
     expect(res).to.have.nested.property('payload.environmentLevel')
     const environmentLevel = res.payload.environmentLevel
-    expect(environmentLevel).to.have.property('sessionTimeout').and.to.be.a('number')
     expect(environmentLevel).to.have.property('sessionTimeout').and.to.be.a('number')
     expect(environmentLevel).to.have.property('deviceID').and.to.match(/^([0-9A-Fa-f-]{0,36}|NONE|none)$/)
     expect(environmentLevel).to.have.property('deviceLocation')
