@@ -61,7 +61,7 @@ describe("Applications State Requests", () => {
     });
 
     it("should return WRONGAPPLICATIONSTATE if requesting `AVAILABLE` state", async () => {
-      await requestState(ApplicationStateCodes.AVAILABLE, {  // Bug from original - requests ACTIVE not AVAILABLE
+      await requestState(ApplicationStateCodes.AVAILABLE, {
         state: ApplicationStateCodes.INITIALIZE,
         status: MessageCodes.WRONG_APPLICATION_STATE,
       });
@@ -229,6 +229,10 @@ describe("Applications State Requests", () => {
     it("should be able to switch to `AVAILABLE` and back to `ACTIVE`", async () => {
       await requestState(ApplicationStateCodes.AVAILABLE);
       await requestState(ApplicationStateCodes.ACTIVE);
+    });
+
+    it("should be able to switch to `UNAVAILABLE`", async () => {
+      await requestState(ApplicationStateCodes.UNAVAILABLE);
     });
   });
 });
