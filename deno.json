@@ -1,0 +1,13 @@
+{
+  "tasks": {
+    "test": "deno test --allow-net --allow-env --allow-read",
+    "check": "deno check **/*.ts",
+    "lint": "deno lint"
+  },
+  "imports": {
+    "@cuss2/models": "jsr:@cuss/cuss2-typescript-models@2.0.1",
+    "@cuss2/cuss2-ts": "jsr:@cuss/cuss2-ts@1.0.9",
+    "@std/testing/bdd": "jsr:@std/testing@^1.0.0/bdd",
+    "@std/expect": "jsr:@std/expect@^1.0.0"
+  }
+}
