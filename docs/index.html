@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CUSS1 Platform Tester</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1>CUSS1 Platform Tester</h1>
+            <div class="header-actions">
+                <button class="btn-primary run-tests-btn">
+                    <span class="play-icon">▶</span> Run Tests
+                </button>
+                <button class="btn-icon settings-btn">
+                    <span class="settings-icon">⚙</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel - Test List -->
+            <aside class="test-panel">
+                <div class="test-tree" id="testTree">
+                    <!-- Tests will be dynamically loaded here -->
+                </div>
+            </aside>
+
+            <!-- Right Panel - Test Results -->
+            <main class="results-panel">
+                <h2>Tests</h2>
+                <div class="results-container" id="resultsContainer">
+                    <div class="empty-state">
+                        <p>No tests have been run yet. Select tests and click "Run Tests" to begin.</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Connection</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="settingsForm">
+                    <div class="form-group">
+                        <label for="serverUrl">WebSocket URL</label>
+                        <input type="text" id="serverUrl" name="serverUrl" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="clientId">Client ID</label>
+                        <input type="text" id="clientId" name="clientId" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="clientSecret">Client Secret</label>
+                        <input type="password" id="clientSecret" name="clientSecret" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="deviceId">Device ID (optional)</label>
+                        <input type="text" id="deviceId" name="deviceId" placeholder="Leave empty for default">
+                    </div>
+                    <div class="form-group">
+                        <label for="oauthUrl">Token URL (optional)</label>
+                        <div class="input-with-button">
+                            <input type="text" id="oauthUrl" name="oauthUrl">
+                            <button type="button" class="btn-secondary generate-btn">Generate</button>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn-primary">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <!-- Application (ES6 Module - imports tests.js) -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>
