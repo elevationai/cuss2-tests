@@ -2,18 +2,68 @@
  * CUSS2 Test Helpers
  * Logging, configuration, builders, and validation utilities
  */
-
-// Import Chai assertion library (browser-friendly)
 import { expect } from "https://esm.sh/chai@5.1.2";
 
-// Import CUSS2 libraries - using local build (handles 'using' keyword for Safari)
-import { Connection, Models } from "../../cuss2-ts/docs/dist/cuss2.esm.js";
+// =============================================================================
+// User Prompt
+// =============================================================================
 
-// Destructure commonly used items from Models
-const { PlatformDirectives } = Models;
+// Track if a prompt is currently active (used to pause test timeout)
+export let promptActive = false;
 
-// Re-export for use in tests.js
-export { expect, Connection, Models, PlatformDirectives };
+/**
+ * Show a modal prompting the user to perform an action
+ * @param {string} message - The message to display
+ * @param {function} waitFor - Async function that resolves when the prompt should close
+ * @returns {Promise<any>} Resolves with waitFor result, rejects if user cancels
+ */
+export async function promptUser(message, waitFor) {
+  promptActive = true;
+
+  const $modal = $("#promptModal");
+  const $message = $("#promptMessage");
+  const $closeBtn = $modal.find(".prompt-close");
+
+  // Set message and show modal
+  $message.text(message);
+  $modal.addClass("show");
+
+  // Cleanup function
+  const cleanup = () => {
+    promptActive = false;
+    $modal.removeClass("show");
+    $closeBtn.off("click", cancelHandler);
+  };
+
+  let rejectCancelled;
+
+  // Handle user cancellation
+  const cancelHandler = () => {
+    cleanup();
+    if (rejectCancelled) {
+      rejectCancelled(new Error("User cancelled the prompt"));
+    }
+  };
+
+  // Listen for cancel
+  $closeBtn.on("click", cancelHandler);
+
+  // Promise that rejects if user cancels
+  const cancelledPromise = new Promise((_, reject) => {
+    rejectCancelled = reject;
+  });
+
+  try {
+    // Race between the waitFor callback and user cancellation
+    const result = await Promise.race([
+      waitFor(),
+      cancelledPromise,
+    ]);
+    return result;
+  } finally {
+    cleanup();
+  }
+}
 
 // =============================================================================
 // Logging
@@ -24,10 +74,10 @@ let testLogs = [];
 export function log(...args) {
   testLogs.push({
     timestamp: Date.now(),
-    data: args.map(a => {
-      if (a === null) return 'null';
-      if (a === undefined) return 'undefined';
-      if (typeof a === 'object') {
+    data: args.map((a) => {
+      if (a === null) return "null";
+      if (a === undefined) return "undefined";
+      if (typeof a === "object") {
         try {
           return JSON.stringify(a, null, 2);
         } catch {
@@ -35,7 +85,7 @@ export function log(...args) {
         }
       }
       return String(a);
-    }).join(' ')
+    }).join(" "),
   });
 }
 
@@ -49,12 +99,29 @@ export function clearLogs() {
 // Configuration
 // =============================================================================
 
-let config = {
+const CONFIG_STORAGE_KEY = "cuss2-test-config";
+
+const defaultConfig = {
   server_url: "http://localhost:22222",
   oauth_url: "http://localhost:22222/oauth/token",
   client_id: "EAI",
   client_secret: "secret",
 };
+
+// Load config from localStorage or use defaults
+function loadConfig() {
+  try {
+    const stored = localStorage.getItem(CONFIG_STORAGE_KEY);
+    if (stored) {
+      return { ...defaultConfig, ...JSON.parse(stored) };
+    }
+  } catch (e) {
+    console.error("Failed to load config:", e);
+  }
+  return { ...defaultConfig };
+}
+
+const config = loadConfig();
 
 export function getConfig() {
   return { ...config };
@@ -65,20 +132,13 @@ export function updateConfig(newConfig) {
   if (newConfig.oauth_url) config.oauth_url = newConfig.oauth_url;
   if (newConfig.client_id) config.client_id = newConfig.client_id;
   if (newConfig.client_secret) config.client_secret = newConfig.client_secret;
-}
 
-// =============================================================================
-// Shared Connection State
-// =============================================================================
-
-let conn = null;
-
-export function getConn() {
-  return conn;
-}
-
-export function setConn(newConn) {
-  conn = newConn;
+  // Persist to localStorage
+  try {
+    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
+  } catch (e) {
+    console.error("Failed to save config:", e);
+  }
 }
 
 // =============================================================================
@@ -123,7 +183,11 @@ export const Build = {
 // Validation Helpers
 // =============================================================================
 
-export const callAndDoBaselineValidation = async (conn, appData, options = {}) => {
+export const callAndDoBaselineValidation = async (
+  conn,
+  appData,
+  options = {},
+) => {
   const directive = appData.meta.directive;
   const componentID = appData.meta.componentID;
   const reqId = appData.meta.requestID;
@@ -142,7 +206,11 @@ export const callAndDoBaselineValidation = async (conn, appData, options = {}) =
     res = await promise;
   } catch (e) {
     if (e instanceof CloseEvent) {
-      throw new Error(`Connection closed unexpectedly (code: ${e.code}, reason: ${e.reason || 'none'})`);
+      throw new Error(
+        `Connection closed unexpectedly (code: ${e.code}, reason: ${
+          e.reason || "none"
+        })`,
+      );
     }
     throw e;
   }
@@ -151,7 +219,11 @@ export const callAndDoBaselineValidation = async (conn, appData, options = {}) =
     ackResponse = await ackPromise;
   } catch (e) {
     if (e instanceof CloseEvent) {
-      throw new Error(`Connection closed while waiting for ACK (code: ${e.code}, reason: ${e.reason || 'none'})`);
+      throw new Error(
+        `Connection closed while waiting for ACK (code: ${e.code}, reason: ${
+          e.reason || "none"
+        })`,
+      );
     }
     throw e;
   }
@@ -172,7 +244,7 @@ export const callAndDoBaselineValidation = async (conn, appData, options = {}) =
   expect(res.meta.applicationID?.companyCode).to.be.ok;
   expect(res.meta.applicationID?.applicationName).to.be.ok;
   expect(res.meta.currentApplicationState?.applicationStateCode).to.equal(
-    options.state || "INITIALIZE"
+    options.state || "INITIALIZE",
   );
   expect(res.meta.messageCode).to.equal(options.status || "OK");
 
