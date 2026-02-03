@@ -14,7 +14,7 @@ implementation, focusing on:
 
 ## Web UI
 
-The primary way to run tests is through the browser-based test UI located in `/docs`.
+Tests are run through the browser-based test UI located in `/docs`.
 
 ### Running Locally
 
@@ -29,9 +29,10 @@ The primary way to run tests is through the browser-based test UI located in `/d
   - Arrow Up/Down: Navigate between tests
   - Arrow Left/Right: Collapse/expand suites
   - Spacebar: Toggle checkbox
-- **Settings Persistence**: Connection settings saved to localStorage
-- **User Prompts**: Interactive prompts for tests requiring user action (e.g., scanning barcodes, disconnecting devices)
-- **Shutdown Hooks**: Automatic cleanup when tests complete
+- **Test Dependencies**: Suites declare dependencies on other suites. The UI enforces this with locked checkboxes — enabling a suite automatically enables its dependencies.
+- **Settings Persistence**: Connection settings and test selections are saved to localStorage.
+- **User Prompts**: Interactive prompts for tests requiring user action (e.g., scanning barcodes, disconnecting devices). Test timeouts are paused while a prompt is active.
+- **Lifecycle Hooks**: Suites can define `beforeEach`/`afterEach` hooks that run around every test, and a `shutdown` hook for cleanup when the suite finishes.
 
 ### Configuration
 
@@ -40,39 +41,40 @@ Click the gear icon to configure:
 - **WebSocket URL**: The CUSS2 platform WebSocket endpoint
 - **Client ID**: Application identifier
 - **Client Secret**: Authentication secret
-- **Token URL**: OAuth token endpoint (optional, can be auto-generated)
+- **Device ID**: Optional device identifier
+- **Token URL**: OAuth token endpoint (optional, can be auto-generated from the WebSocket URL)
 
-## CLI Tests (Deno)
+Default configuration:
 
-Command-line tests are also available using Deno:
-
-```bash
-# Run all tests
-deno task test
-
-# Run specific test file
-deno test --allow-net --allow-env --allow-read test/connection.test.ts
-```
-
-### Prerequisites
-
-- [Deno](https://deno.land/) runtime installed
-- CUSS2 server running to test against
-
-### Configuration
-
-CLI test configuration is in `config.ts`:
-
-```typescript
-export default {
-  server_url: "http://localhost:22222",
-  oauth_url: "http://localhost:22222/oauth/token",
-  client_id: "EIA",
-  client_secret: "secret",
-};
+```json
+{
+  "server_url": "http://localhost:22222",
+  "oauth_url": "http://localhost:22222/oauth/token",
+  "client_id": "EAI",
+  "client_secret": "secret"
+}
 ```
 
 ## Test Structure
+
+### Test Suites
+
+| Suite | Dependencies | Status |
+|-------|-------------|--------|
+| Connect to platform | — | Implemented |
+| INITIALIZE | — | Implemented |
+| Setup Components | initialize | Placeholder |
+| UNAVAILABLE | initialize | Implemented |
+| AVAILABLE | unavailable | Implemented |
+| ACTIVE | available | Implemented |
+| BTP Printer | active | Placeholder |
+| BPP Printer | active | Placeholder |
+| Barcode Scan | active | Implemented |
+| Passport Scan | active | Placeholder |
+| Announcement | active | Placeholder |
+| Credit Card | active | Placeholder |
+
+Placeholder suites are defined but have no test functions yet.
 
 ### Base Component Tests
 
@@ -107,4 +109,5 @@ tests: baseComponentTests("barcodeReader", () => [
 
 ## Protocol Documentation
 
-See `/diagrams/websocket.md` for WebSocket protocol sequence diagrams.
+- `/diagrams/websocket.md` — WebSocket connection sequence diagrams (error codes 4001–4006, successful connection)
+- `/diagrams/accessibility.md` — Accessibility mode sequence diagrams (protocol-level documentation, no corresponding tests yet)
