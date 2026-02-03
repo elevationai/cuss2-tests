@@ -153,9 +153,6 @@ sequenceDiagram
     Note right of Passenger: Option: Applications must<br>recognize this issue, abort their<br>Acknowledgement(accessibleMode: true)<br>when they recieve the 2nd message
 ```
 
-
-
-
 ## Scenarios for all activation methods
 
 ### App does not acknowledge

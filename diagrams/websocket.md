@@ -1,4 +1,5 @@
 ### Timeout waiting for Environment request
+
 ```mermaid
 sequenceDiagram
     opt Server Config
@@ -10,6 +11,7 @@ sequenceDiagram
 ```
 
 ### ApplicationData object validation
+
 ```mermaid
 sequenceDiagram
     Client->>Server: connect
@@ -18,6 +20,7 @@ sequenceDiagram
 ```
 
 ### First Directive Must Be PLATFORM_ENVIRONMENT
+
 ```mermaid
 sequenceDiagram
     Client->>Server: connect
@@ -26,6 +29,7 @@ sequenceDiagram
 ```
 
 ### Invalid OAuth Token
+
 ```mermaid
 sequenceDiagram
     Client->>Server: connect
@@ -34,6 +38,7 @@ sequenceDiagram
 ```
 
 ### Successful Connection
+
 ```mermaid
 sequenceDiagram
     Client->>Server: connect
@@ -42,6 +47,7 @@ sequenceDiagram
 ```
 
 ### Client already connected
+
 ```mermaid
 sequenceDiagram
     Client->>Server: connect
@@ -53,6 +59,7 @@ sequenceDiagram
 ```
 
 ### Tenant DISABLED
+
 ```mermaid
 sequenceDiagram
     opt Tenants Config
