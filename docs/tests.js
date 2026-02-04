@@ -57,22 +57,25 @@ function baseComponentTests(componentName, additionalTests) {
       name: "it should report NOT_REACHABLE when the device is disconnected",
       test: async function () {
         const component = getComponent();
-        await promptUser(`Disconnect the ${componentName}`, () =>
-          new Promise((resolve) => {
-            // If already NOT_REACHABLE, resolve immediately
-            if (component.status === "NOT_REACHABLE") {
-              resolve();
-              return;
-            }
-            // Otherwise wait for status change
-            const handler = (status) => {
-              if (status === "NOT_REACHABLE") {
-                component.off("statusChange", handler);
+        await promptUser(
+          `Disconnect the ${componentName}`,
+          () =>
+            new Promise((resolve) => {
+              // If already NOT_REACHABLE, resolve immediately
+              if (component.status === "NOT_REACHABLE") {
                 resolve();
+                return;
               }
-            };
-            component.on("statusChange", handler);
-          })
+              // Otherwise wait for status change
+              const handler = (status) => {
+                if (status === "NOT_REACHABLE") {
+                  component.off("statusChange", handler);
+                  resolve();
+                }
+              };
+              component.on("statusChange", handler);
+            }),
+          { icon: "unplug" },
         );
         expect(component.status).to.equal("NOT_REACHABLE");
         log(`${componentName} reported NOT_REACHABLE`);
@@ -82,22 +85,25 @@ function baseComponentTests(componentName, additionalTests) {
       name: "it should report OK when the device is reconnected",
       test: async function () {
         const component = getComponent();
-        await promptUser(`Reconnect the ${componentName}`, () =>
-          new Promise((resolve) => {
-            // If already OK, resolve immediately
-            if (component.status === "OK") {
-              resolve();
-              return;
-            }
-            // Otherwise wait for status change
-            const handler = (status) => {
-              if (status === "OK") {
-                component.off("statusChange", handler);
+        await promptUser(
+          `Reconnect the ${componentName}`,
+          () =>
+            new Promise((resolve) => {
+              // If already OK, resolve immediately
+              if (component.status === "OK") {
                 resolve();
+                return;
               }
-            };
-            component.on("statusChange", handler);
-          })
+              // Otherwise wait for status change
+              const handler = (status) => {
+                if (status === "OK") {
+                  component.off("statusChange", handler);
+                  resolve();
+                }
+              };
+              component.on("statusChange", handler);
+            }),
+          { icon: "plug" },
         );
         expect(component.status).to.equal("OK");
         log(`${componentName} reported OK`);
@@ -452,10 +458,13 @@ export const testConfig = [
       {
         name: "it should return data from a scan",
         test: async function () {
-          const data = await promptUser("Scan a barcode", () =>
-            new Promise((resolve) => {
-              cuss2.barcodeReader.once("data", resolve);
-            })
+          const data = await promptUser(
+            "Scan a barcode",
+            () =>
+              new Promise((resolve) => {
+                cuss2.barcodeReader.once("data", resolve);
+              }),
+            { icon: "scan-barcode" },
           );
 
           expect(data).to.be.ok;

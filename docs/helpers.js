@@ -15,14 +15,25 @@ export let promptActive = false;
  * Show a modal prompting the user to perform an action
  * @param {string} message - The message to display
  * @param {function} waitFor - Async function that resolves when the prompt should close
+ * @param {object} [options] - Optional settings
+ * @param {string} [options.icon] - Lucide icon name to display (e.g., 'scan-barcode', 'unplug')
  * @returns {Promise<any>} Resolves with waitFor result, rejects if user cancels
  */
-export async function promptUser(message, waitFor) {
+export async function promptUser(message, waitFor, options = {}) {
   promptActive = true;
 
   const $modal = $("#promptModal");
   const $message = $("#promptMessage");
+  const $icon = $("#promptIcon");
   const $closeBtn = $modal.find(".prompt-close");
+
+  // Set icon if provided
+  if (options.icon && typeof lucide !== "undefined") {
+    $icon.html(`<i data-lucide="${options.icon}"></i>`);
+    lucide.createIcons({ nodes: $icon.get() });
+  } else {
+    $icon.empty();
+  }
 
   // Set message and show modal
   $message.text(message);

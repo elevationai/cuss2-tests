@@ -541,6 +541,22 @@ body {
   color: var(--error-red);
 }
 
+.prompt-modal .prompt-icon {
+  text-align: center;
+  padding-top: var(--spacing-lg);
+  color: var(--primary-cyan);
+}
+
+.prompt-modal .prompt-icon svg {
+  width: 64px;
+  height: 64px;
+  stroke-width: 1.5;
+}
+
+.prompt-modal .prompt-icon:empty {
+  display: none;
+}
+
 .prompt-modal .prompt-message {
   font-size: 2rem;
   color: var(--text-primary);
