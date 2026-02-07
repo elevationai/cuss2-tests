@@ -12,13 +12,6 @@ Browser-based integration tests for CUSS2 (Common Use Self Service) platforms.
 - `/diagrams` - Protocol documentation (WebSocket sequences, accessibility modes)
 - `/mocks` - Mock-up documentation
 
-## Running Tests
-
-1. Serve `/docs` with a static file server
-2. Open `index.html` in a browser
-3. Configure connection settings (gear icon)
-4. Select and run tests
-
 ## Test Suite Conventions
 
 ### Suite Structure
