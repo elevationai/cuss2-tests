@@ -25,6 +25,7 @@ export async function promptUser(message, waitFor, options = {}) {
   const $modal = $("#promptModal");
   const $message = $("#promptMessage");
   const $icon = $("#promptIcon");
+  const $buttons = $("#promptButtons");
   const $closeBtn = $modal.find(".prompt-close");
 
   // Set icon if provided
@@ -37,12 +38,14 @@ export async function promptUser(message, waitFor, options = {}) {
 
   // Set message and show modal
   $message.text(message);
+  $buttons.empty();
   $modal.addClass("show");
 
   // Cleanup function
   const cleanup = () => {
     promptActive = false;
     $modal.removeClass("show");
+    $buttons.empty();
     $closeBtn.off("click", cancelHandler);
   };
 
@@ -64,12 +67,28 @@ export async function promptUser(message, waitFor, options = {}) {
     rejectCancelled = reject;
   });
 
+  // Build race candidates
+  const raceCandidates = [cancelledPromise];
+
+  if (waitFor) {
+    raceCandidates.push(waitFor());
+  }
+
+  // Render buttons if provided
+  if (options.buttons && options.buttons.length > 0) {
+    const buttonPromise = new Promise((resolve) => {
+      options.buttons.forEach((btn) => {
+        const $btn = $("<button>").text(btn.label).on("click", () => {
+          resolve(btn.value);
+        });
+        $buttons.append($btn);
+      });
+    });
+    raceCandidates.push(buttonPromise);
+  }
+
   try {
-    // Race between the waitFor callback and user cancellation
-    const result = await Promise.race([
-      waitFor(),
-      cancelledPromise,
-    ]);
+    const result = await Promise.race(raceCandidates);
     return result;
   } finally {
     cleanup();
@@ -194,6 +213,35 @@ export const Build = {
 // Validation Helpers
 // =============================================================================
 
+/**
+ * Helper to test peripherals_setup in a specific application state
+ * @param {object} cuss2 - The Cuss2 instance
+ * @param {string} expectedState - Expected current state
+ * @returns {Promise<{inconclusive?: boolean, success?: boolean, response?: object, error?: Error}>}
+ */
+export async function testSetupInState(cuss2, expectedState) {
+  expect(cuss2.state).to.equal(expectedState);
+  log(`Testing setup in ${expectedState} state`);
+
+  const printer = cuss2.boardingPassPrinter || cuss2.bagTagPrinter;
+  if (!printer) {
+    return { inconclusive: true, reason: "No printer component available" };
+  }
+
+  if (typeof printer.setup !== "function") {
+    return { inconclusive: true, reason: "Setup method not available on component" };
+  }
+
+  try {
+    const response = await printer.setup({});
+    log(`Setup in ${expectedState}: ${response.meta.messageCode}`);
+    return { success: response.meta.messageCode === "OK", response };
+  } catch (error) {
+    log(`Setup in ${expectedState} error: ${error.message || error}`);
+    return { error };
+  }
+}
+
 export const callAndDoBaselineValidation = async (
   conn,
   appData,
@@ -268,4 +316,32 @@ export const callAndDoBaselineValidation = async (
   }
 
   return res;
+};
+
+/**
+ * Validate an unsolicited message has correct eventClassification
+ * @param {object} message - The PlatformData message
+ */
+export const validateUnsolicitedMessage = (message) => {
+  expect(message).to.be.ok;
+  expect(message.meta).to.be.ok;
+
+  const eventClassification = message.meta.eventClassification;
+  expect(eventClassification).to.be.ok;
+
+  if (eventClassification) {
+    expect(eventClassification.eventMode).to.equal("UNSOLICITED");
+    expect(eventClassification.eventType).to.be.oneOf(["PUBLIC", "PRIVATE"]);
+    expect(eventClassification.eventCategory).to.be.oneOf([
+      "NORMAL",
+      "WARNING",
+      "ALARM",
+    ]);
+
+    log(
+      `eventClassification: mode=${eventClassification.eventMode}, type=${eventClassification.eventType}, category=${eventClassification.eventCategory}`,
+    );
+  }
+
+  return message;
 };

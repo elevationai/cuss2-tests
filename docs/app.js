@@ -3,7 +3,7 @@
  */
 
 import { testConfig } from "./tests.js";
-import { clearLogs, getConfig, updateConfig, promptActive } from "./helpers.js";
+import { clearLogs, getConfig, promptActive, updateConfig } from "./helpers.js";
 
 // Application State (dynamic - tracks runtime state)
 const appState = {
@@ -13,6 +13,90 @@ const appState = {
   checkedTests: new Set(["connect"]), // IDs of checked tests
   disabledTests: new Map(), // Map of disabled test IDs to reasons (populated after tests run)
 };
+
+// Tooltip data keyed by element ID: { text: string, diagram?: string, svg?: string }
+const tooltips = new Map();
+let tooltipCounter = 0;
+
+/**
+ * Render a description string into HTML.
+ * Supports paragraphs (double newline), bullet lists (lines starting with - ),
+ * inline code (`backticks`), and bold (**text**).
+ */
+function renderDescription(data) {
+  if (!data) return "";
+  const text = typeof data === "string" ? data : data.text;
+  if (!text) return "";
+
+  const paragraphs = text.split("\n\n");
+  let html = paragraphs.map((para) => {
+    const lines = para.split("\n");
+    const listLines = lines.filter((l) => /^[-•] /.test(l.trim()));
+
+    if (listLines.length > 0) {
+      const parts = [];
+      let currentList = [];
+
+      for (const line of lines) {
+        if (/^[-•] /.test(line.trim())) {
+          currentList.push(line.trim().replace(/^[-•] /, ""));
+        } else {
+          if (currentList.length > 0) {
+            parts.push(
+              "<ul>" +
+                currentList.map((i) => `<li>${formatInline(i)}</li>`).join("") +
+                "</ul>",
+            );
+            currentList = [];
+          }
+          parts.push(`<p>${formatInline(line)}</p>`);
+        }
+      }
+      if (currentList.length > 0) {
+        parts.push(
+          "<ul>" +
+            currentList.map((i) => `<li>${formatInline(i)}</li>`).join("") +
+            "</ul>",
+        );
+      }
+      return parts.join("");
+    }
+
+    return `<p>${formatInline(para).replace(/\n/g, "<br>")}</p>`;
+  }).join("");
+
+  if (data.svg) {
+    html += `<div class="tooltip-diagram">${data.svg}</div>`;
+  }
+
+  return html;
+}
+
+function formatInline(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
+/**
+ * Pre-render mermaid diagrams for all tooltips that have them
+ */
+async function preRenderDiagrams() {
+  if (typeof mermaid === "undefined") return;
+  for (const [id, data] of tooltips) {
+    if (data.diagram && !data.svg) {
+      try {
+        const { svg } = await mermaid.render(`mmd-${id}`, data.diagram);
+        data.svg = svg;
+      } catch (e) {
+        console.warn(`Failed to render diagram for ${id}`, e);
+      }
+    }
+  }
+}
 
 const STORAGE_KEY = "cuss2-test-checked-states";
 
@@ -77,12 +161,32 @@ function loadCheckedStates() {
 /**
  * Initialize the application
  */
-$(document).ready(function () {
+$(document).ready(async function () {
+  // Initialize mermaid for diagram rendering
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: "dark",
+      themeVariables: {
+        background: "#1a1a2e",
+        primaryColor: "#1a1a2e",
+        primaryBorderColor: "#64ffda",
+        lineColor: "#64ffda",
+        textColor: "#e0e0e0",
+        secondaryColor: "#0f0f1e",
+        tertiaryColor: "#0f0f1e",
+      },
+    });
+  }
+
   loadConfigFromQueryParams();
   loadCheckedStates();
   renderTestTree();
   updateLockedCheckboxes();
   bindEventHandlers();
+
+  // Pre-render any mermaid diagrams in tooltips
+  await preRenderDiagrams();
 });
 
 /**
@@ -123,7 +227,18 @@ function renderTestTree() {
   const $testTree = $("#testTree");
   $testTree.empty();
 
+  let currentGroup = null;
+
   appState.tests.forEach((test) => {
+    if (test.group && test.group !== currentGroup) {
+      currentGroup = test.group;
+      const $groupHeader = $("<div>")
+        .addClass("test-group-header")
+        .attr("data-group", currentGroup)
+        .text(currentGroup);
+      $testTree.append($groupHeader);
+    }
+
     const $testItem = createTestItem(test);
     $testTree.append($testItem);
   });
@@ -196,6 +311,21 @@ function createTestItem(test, level = 0, parentId = null, index = 0) {
     .text(labelText);
 
   $content.append($text);
+
+  // Add info icon with description tooltip
+  if (test.description) {
+    const tipId = `tip-${tooltipCounter++}`;
+    tooltips.set(tipId, { text: test.description, diagram: test.diagram });
+    const $infoIcon = $("<span>")
+      .addClass("info-icon")
+      .attr("data-tip", tipId)
+      .html('<i data-lucide="info"></i>');
+    $content.append($infoIcon);
+
+    if (typeof lucide !== "undefined") {
+      lucide.createIcons({ nodes: $infoIcon.get() });
+    }
+  }
   $item.append($content);
   $container.append($item);
 
@@ -224,6 +354,41 @@ function createTestItem(test, level = 0, parentId = null, index = 0) {
  * Bind event handlers
  */
 function bindEventHandlers() {
+  // Global tooltip positioning
+  const $tooltip = $("#tooltip");
+
+  $(document).on("mouseenter", "[data-tip]", function () {
+    const data = tooltips.get($(this).attr("data-tip"));
+    if (!data) return;
+
+    $tooltip.html(renderDescription(data)).addClass("visible");
+
+    const rect = this.getBoundingClientRect();
+    let top = rect.top - $tooltip.outerHeight() - 8;
+    let left = rect.left + rect.width / 2 - $tooltip.outerWidth() / 2;
+
+    // Keep within viewport
+    if (top < 4) top = rect.bottom + 8;
+    if (left < 4) left = 4;
+    if (left + $tooltip.outerWidth() > window.innerWidth - 4) {
+      left = window.innerWidth - $tooltip.outerWidth() - 4;
+    }
+
+    $tooltip.css({ top, left });
+  });
+
+  $(document).on("mouseleave", "[data-tip]", function () {
+    $tooltip.removeClass("visible");
+  });
+
+  // Dismiss tooltip on click anywhere or scroll
+  $(document).on("click", function () {
+    $tooltip.removeClass("visible");
+  });
+  document.addEventListener("scroll", function () {
+    $tooltip.removeClass("visible");
+  }, true);
+
   // Test item checkbox change
   $(document).on("change", '.test-item input[type="checkbox"]', function () {
     const $item = $(this).closest(".test-item");
@@ -319,7 +484,10 @@ function bindEventHandlers() {
       case "ArrowRight":
         e.preventDefault();
         // Expand if collapsed
-        if ($container.hasClass("has-children") && $container.hasClass("collapsed")) {
+        if (
+          $container.hasClass("has-children") &&
+          $container.hasClass("collapsed")
+        ) {
           $container.removeClass("collapsed");
         }
         break;
@@ -327,11 +495,16 @@ function bindEventHandlers() {
       case "ArrowLeft":
         e.preventDefault();
         // Collapse if expanded, or go to parent and collapse
-        if ($container.hasClass("has-children") && !$container.hasClass("collapsed")) {
+        if (
+          $container.hasClass("has-children") &&
+          !$container.hasClass("collapsed")
+        ) {
           $container.addClass("collapsed");
         } else {
           // Find parent container and collapse it, focus on parent
-          const $parentContainer = $container.parent().closest(".test-item-container");
+          const $parentContainer = $container.parent().closest(
+            ".test-item-container",
+          );
           if ($parentContainer.length) {
             $parentContainer.addClass("collapsed");
             $parentContainer.children(".test-item").first().focus();
@@ -344,7 +517,9 @@ function bindEventHandlers() {
         // Toggle checkbox
         const $checkbox = $current.find('input[type="checkbox"]');
         if ($checkbox.length && !$checkbox.prop("disabled")) {
-          $checkbox.prop("checked", !$checkbox.prop("checked")).trigger("change");
+          $checkbox.prop("checked", !$checkbox.prop("checked")).trigger(
+            "change",
+          );
         }
         break;
 
@@ -604,6 +779,7 @@ async function runTests() {
 
   // Track executed suites for shutdown
   const executedSuites = [];
+  const startTime = performance.now();
 
   try {
     // Execute tests sequentially
@@ -634,6 +810,19 @@ async function runTests() {
     }
   }
 
+  // Calculate summary
+  const summary = {
+    total: appState.testResults.length,
+    passed: appState.testResults.filter((r) => r.status === "pass").length,
+    failed: appState.testResults.filter((r) => r.status === "fail").length,
+    inconclusive:
+      appState.testResults.filter((r) => r.status === "inconclusive").length,
+    duration: performance.now() - startTime,
+  };
+
+  // Render final results with summary
+  renderTestResults(summary);
+
   // Restore button state
   $(".run-tests-btn").prop("disabled", false).html(
     '<span class="play-icon">▶</span> Run Tests',
@@ -645,6 +834,12 @@ async function runTests() {
  * Returns false if execution should stop
  */
 async function executeTestSuite(testSuite) {
+  // Run beforeAll hook if it exists
+  if (testSuite.beforeAll) {
+    console.log("Running beforeAll for:", testSuite.name);
+    await testSuite.beforeAll();
+  }
+
   // If the suite has tests, execute each one
   if (testSuite.tests && testSuite.tests.length > 0) {
     for (const test of testSuite.tests) {
@@ -685,6 +880,7 @@ async function executeTest(testSuite, test) {
     id: testSuite.id,
     suiteName: testSuite.name,
     name: testName,
+    description: test ? test.description : null,
     status: "pending",
     error: null,
     errorStack: null,
@@ -712,9 +908,10 @@ async function executeTest(testSuite, test) {
     if (testFn) {
       console.log("Running test function for:", testName);
       // Add timeout to prevent hanging (pauses while promptActive)
+      // Tests can specify custom timeout via test.timeout (in ms)
       const testPromise = testFn.call(context);
+      const timeoutMs = test.timeout || 5000;
       const timeoutPromise = new Promise((_, reject) => {
-        const timeoutMs = 5000;
         let elapsed = 0;
         const checkInterval = 100;
 
@@ -725,20 +922,31 @@ async function executeTest(testSuite, test) {
           }
           if (elapsed >= timeoutMs) {
             clearInterval(intervalId);
-            reject(new Error("Test timeout after 5 seconds"));
+            reject(new Error(`Test timeout after ${timeoutMs / 1000} seconds`));
           }
         }, checkInterval);
 
         // Clear interval when test completes
-        testPromise.then(() => clearInterval(intervalId)).catch(() => clearInterval(intervalId));
+        testPromise.then(() => clearInterval(intervalId)).catch(() =>
+          clearInterval(intervalId)
+        );
       });
 
       await Promise.race([testPromise, timeoutPromise]);
     }
 
-    // Test passed
-    result.status = "pass";
-    console.log("Test passed:", testName);
+    // Check if test explicitly set result status (e.g., inconclusive)
+    if (context.result?.status) {
+      result.status = context.result.status;
+      if (context.result.reason) {
+        result.reason = context.result.reason;
+      }
+      console.log(`Test ${context.result.status}:`, testName);
+    } else {
+      // Test passed
+      result.status = "pass";
+      console.log("Test passed:", testName);
+    }
   } catch (error) {
     // Test failed
     result.status = "fail";
@@ -779,13 +987,14 @@ async function executeTest(testSuite, test) {
   }
 
   // Return false if test failed (stop execution)
-  return result.status === "pass";
+  // Inconclusive tests do not stop execution
+  return result.status === "pass" || result.status === "inconclusive";
 }
 
 /**
  * Render test results in the results panel
  */
-function renderTestResults() {
+function renderTestResults(summary = null) {
   const $resultsContainer = $("#resultsContainer");
   $resultsContainer.empty();
 
@@ -812,6 +1021,16 @@ function renderTestResults() {
     const $resultCard = createResultCard(result);
     $resultsContainer.append($resultCard);
   });
+
+  // Add summary if provided
+  if (summary) {
+    const $summary = createSummaryCard(summary);
+    $resultsContainer.append($summary);
+  }
+
+  // Auto-scroll to bottom
+  const $resultsPanel = $(".results-panel");
+  $resultsPanel.scrollTop($resultsPanel[0].scrollHeight);
 }
 
 /**
@@ -828,6 +1047,7 @@ function createResultCard(result) {
   let statusIcon = "○"; // pending
   if (result.status === "pass") statusIcon = "✓";
   if (result.status === "fail") statusIcon = "✗";
+  if (result.status === "inconclusive") statusIcon = "?";
 
   const $icon = $("<span>")
     .addClass("status-icon")
@@ -835,6 +1055,17 @@ function createResultCard(result) {
     .text(statusIcon);
 
   const $title = $("<h3>").text(result.name);
+
+  // Info icon for description
+  if (result.description) {
+    const tipId = `tip-${tooltipCounter++}`;
+    tooltips.set(tipId, { text: result.description, diagram: result.diagram });
+    const $infoIcon = $("<span>")
+      .addClass("info-icon")
+      .attr("data-tip", tipId)
+      .html('<i data-lucide="info"></i>');
+    $title.append($infoIcon);
+  }
 
   // Duration
   if (result.duration > 0) {
@@ -848,6 +1079,11 @@ function createResultCard(result) {
 
   $card.append($header);
 
+  // Render Lucide icons in the card
+  if (typeof lucide !== "undefined") {
+    lucide.createIcons({ nodes: $card.get() });
+  }
+
   // Error message with stack trace
   if (result.errorStack) {
     const $errorBox = $("<div>")
@@ -859,6 +1095,14 @@ function createResultCard(result) {
       .addClass("message-box error-message")
       .text(result.error);
     $card.append($errorBox);
+  }
+
+  // Inconclusive reason
+  if (result.status === "inconclusive" && result.reason) {
+    const $reasonBox = $("<div>")
+      .addClass("message-box inconclusive-reason")
+      .text(result.reason);
+    $card.append($reasonBox);
   }
 
   // Show logs only when test failed and there are logs
@@ -880,6 +1124,59 @@ function createResultCard(result) {
 
     $card.append($logBox);
   }
+
+  return $card;
+}
+
+/**
+ * Create a summary card element
+ */
+function createSummaryCard(summary) {
+  const $card = $("<div>")
+    .addClass("test-summary");
+
+  const $header = $("<div>")
+    .addClass("test-summary-header")
+    .text("Test Run Complete");
+
+  const $stats = $("<div>").addClass("test-summary-stats");
+
+  // Total
+  const $total = $("<div>")
+    .addClass("summary-stat")
+    .html(
+      `<span class="stat-value">${summary.total}</span><span class="stat-label">Total</span>`,
+    );
+
+  // Passed
+  const $passed = $("<div>")
+    .addClass("summary-stat pass")
+    .html(
+      `<span class="stat-value">${summary.passed}</span><span class="stat-label">Passed</span>`,
+    );
+
+  // Failed
+  const $failed = $("<div>")
+    .addClass("summary-stat fail")
+    .html(
+      `<span class="stat-value">${summary.failed}</span><span class="stat-label">Failed</span>`,
+    );
+
+  // Inconclusive
+  const $inconclusive = $("<div>")
+    .addClass("summary-stat inconclusive")
+    .html(
+      `<span class="stat-value">${summary.inconclusive}</span><span class="stat-label">Inconclusive</span>`,
+    );
+
+  $stats.append($total, $passed, $failed, $inconclusive);
+
+  // Duration
+  const $duration = $("<div>")
+    .addClass("test-summary-duration")
+    .text(`Total time: ${(summary.duration / 1000).toFixed(2)}s`);
+
+  $card.append($header, $stats, $duration);
 
   return $card;
 }

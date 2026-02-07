@@ -51,6 +51,7 @@
         <button class="prompt-close">&times;</button>
         <div class="prompt-icon" id="promptIcon"></div>
         <div class="prompt-message" id="promptMessage"></div>
+        <div class="prompt-buttons" id="promptButtons"></div>
       </div>
     </div>
 
@@ -106,10 +107,17 @@
       </div>
     </div>
 
+    <!-- Global Tooltip -->
+    <div id="tooltip" class="tooltip"></div>
+
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script
+      src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"
+    ></script>
+    <!-- Mermaid Diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
     <!-- Application (ES6 Module - imports tests.js) -->
     <script type="module" src="app.js"></script>
   </body>
