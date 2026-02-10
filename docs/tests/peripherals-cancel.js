@@ -12,10 +12,10 @@ export const peripheralsCancelSuite = {
   name: "Peripherals Cancel",
   description:
     "Tests the peripherals_cancel directive for cancelling pending operations like print jobs.",
-  dependencies: ["active"],
   tests: [
     {
       name: "it should cancel a pending send operation",
+      requiredTests: ["active.0"],
       description:
         "Validates that `PERIPHERALS_CANCEL` can abort a pending `PERIPHERALS_SEND` operation (e.g., a print job in progress).\n\n**How it works:**\n- Enables a printer component via `PERIPHERALS_ENABLE`\n- Prompts the user not to remove paper from the printer\n- Sends `PERIPHERALS_SEND` to start a print job (captured as a promise, errors caught)\n- Immediately sends `PERIPHERALS_CANCEL` before the print completes\n- Logs both the print result and cancel response `meta.messageCode`\n- Disables the printer after the test\n\n**What is validated:**\n- `PERIPHERALS_CANCEL` completes without error\n- The pending `PERIPHERALS_SEND` either completes with a `CANCELLED` status or throws an error indicating cancellation\n\n**Protocol detail:** `PERIPHERALS_CANCEL` targets all pending operations on the specified component. The platform should abort in-progress hardware operations and return a response for the cancelled directive with an appropriate status code.",
       diagram: "sequenceDiagram\n  participant App\n  participant Platform\n  participant Printer\n  App->>Platform: PERIPHERALS_SEND (print job)\n  Platform->>Printer: Start printing\n  App->>Platform: PERIPHERALS_CANCEL\n  Platform->>Printer: Abort print\n  Platform-->>App: CANCEL response (OK)\n  Platform-->>App: SEND response (CANCELLED)",
@@ -57,6 +57,7 @@ export const peripheralsCancelSuite = {
     },
     {
       name: "cancel should work from AVAILABLE state",
+      requiredTests: ["active.0"],
       description:
         "Verifies that `PERIPHERALS_CANCEL` can be sent when the application is in `AVAILABLE` state without causing an error.\n\n**How it works:**\n- Transitions to `AVAILABLE` state\n- Sends `PERIPHERALS_CANCEL` to the first component that supports it\n- Logs the response `meta.messageCode` or any error\n- Returns to `ACTIVE` state\n\n**What is validated:**\n- `PERIPHERALS_CANCEL` does not return `WRONG_APPLICATION_STATE` in `AVAILABLE`\n- Like `PERIPHERALS_QUERY`, cancel is expected to be valid in multiple states since it is a safety mechanism to abort pending operations\n\n**Note:** Some components may not have pending operations to cancel in `AVAILABLE` state, so the response may vary by platform implementation.",
       test: async function () {
@@ -83,6 +84,7 @@ export const peripheralsCancelSuite = {
     },
     {
       name: "cancel should work from UNAVAILABLE state",
+      requiredTests: ["active.0"],
       description:
         "Verifies that `PERIPHERALS_CANCEL` can be sent when the application is in `UNAVAILABLE` state without causing an error.\n\n**How it works:**\n- Transitions to `UNAVAILABLE` state\n- Sends `PERIPHERALS_CANCEL` to the first component that supports it\n- Logs the response `meta.messageCode` or any error\n- Returns to `ACTIVE` state via `AVAILABLE` -> `ACTIVE`\n\n**What is validated:**\n- `PERIPHERALS_CANCEL` does not return `WRONG_APPLICATION_STATE` in `UNAVAILABLE`\n- The cancel directive is permitted as a cleanup mechanism even in non-active states",
       test: async function () {
@@ -109,6 +111,7 @@ export const peripheralsCancelSuite = {
     },
     {
       name: "cancel with no pending operations should return OK",
+      requiredTests: ["active.0"],
       description:
         "Validates platform behavior when `PERIPHERALS_CANCEL` is sent to an enabled component that has no pending operations.\n\n**How it works:**\n- Enables a component via `PERIPHERALS_ENABLE`\n- Sends `PERIPHERALS_CANCEL` without any prior `PERIPHERALS_SEND`\n- Asserts `meta.messageCode` is either `OK` or `OUT_OF_SEQUENCE`\n- Disables the component\n\n**What is validated:**\n- `meta.messageCode` is one of `OK` or `OUT_OF_SEQUENCE`\n- The platform handles a no-op cancel gracefully without crashing or closing the connection\n\n**Acceptable responses:**\n- `OK` - platform acknowledges the cancel even though nothing was pending\n- `OUT_OF_SEQUENCE` - platform indicates there was nothing to cancel, which is also valid behavior",
       test: async function () {

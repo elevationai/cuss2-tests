@@ -13,7 +13,6 @@ export const passportScanSuite = {
   name: "Passport Scan",
   description:
     "Tests for document reader / passport scanner including MRZ reading and media state detection.",
-  dependencies: ["active"],
   tests: baseComponentTests(getCuss2, "documentReader", () => [
     {
       name: "it should scan a passport (MEDIA_PRESENT → data → MEDIA_ABSENT)",
@@ -113,5 +112,5 @@ export const passportScanSuite = {
         log("MEDIA_ABSENT received");
       },
     },
-  ]),
+  ], ["active.0"]),
 };

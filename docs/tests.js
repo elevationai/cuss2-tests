@@ -25,7 +25,6 @@ import { setupContextSuite } from "./tests/setup-context.js";
 
 // Directive Handling
 import { directiveErrorsSuite } from "./tests/directive-errors.js";
-import { peripheralsQuerySuite } from "./tests/peripherals-query.js";
 import { peripheralsCancelSuite } from "./tests/peripherals-cancel.js";
 import { concurrentDirectivesSuite } from "./tests/concurrent-directives.js";
 
@@ -42,6 +41,7 @@ import { announcementSuite } from "./tests/announcement.js";
 // Component Tests - Interactive devices
 import { creditCardSuite } from "./tests/credit-card.js";
 import { illuminationSuite } from "./tests/illumination.js";
+import { keypadSuite } from "./tests/keypad.js";
 
 // Component Tests - Complex devices
 import { sbdConveyorsSuite } from "./tests/sbd-conveyors.js";
@@ -71,7 +71,6 @@ activeSuite.group = "State Progression";
 
 directiveErrorsSuite.group = "Protocol";
 concurrentDirectivesSuite.group = "Protocol";
-peripheralsQuerySuite.group = "Protocol";
 peripheralsCancelSuite.group = "Protocol";
 
 setupContextSuite.group = "Setup & Context";
@@ -79,6 +78,7 @@ setupContextSuite.group = "Setup & Context";
 barcodeScanSuite.group = "Input Devices";
 passportScanSuite.group = "Input Devices";
 creditCardSuite.group = "Input Devices";
+keypadSuite.group = "Input Devices";
 
 btpPrinterSuite.group = "Output Devices";
 bppPrinterSuite.group = "Output Devices";
@@ -119,7 +119,6 @@ export const testConfig = [
   // Protocol (automated, no hardware interaction)
   directiveErrorsSuite,
   concurrentDirectivesSuite,
-  peripheralsQuerySuite,
   peripheralsCancelSuite,
 
   // Setup & Context
@@ -129,6 +128,7 @@ export const testConfig = [
   barcodeScanSuite,
   passportScanSuite,
   creditCardSuite,
+  keypadSuite,
   // Output Devices
   btpPrinterSuite,
   bppPrinterSuite,

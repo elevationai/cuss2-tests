@@ -12,10 +12,10 @@ export const sessionExtensionSuite = {
   name: "Session Extension",
   description:
     "Tests for session extension functionality including extension requests, limits, and device help instructions.",
-  dependencies: ["active"],
   tests: [
     {
       name: "EnvironmentLevel should include sessionExtensionDuration",
+      requiredTests: ["active.0"],
       description:
         "Validates that the platform's `EnvironmentLevel` data includes the `sessionExtensionDuration` field.\n\nThe `sessionExtensionDuration` value (in milliseconds) indicates how much additional time is granted each time a session extension is approved. This value is set by the platform operator and reported during the initial `PLATFORM_DATA` handshake.\n\n**What is validated:**\n- `cuss2.environment.sessionExtensionDuration` is a number (if present)\n\n**Prerequisites:**\n- Platform must have completed initialization and provided environment data",
       test: function () {
@@ -34,6 +34,7 @@ export const sessionExtensionSuite = {
     },
     {
       name: "EnvironmentLevel should include maxSessionExtensions",
+      requiredTests: ["active.0"],
       description:
         "Validates that the platform's `EnvironmentLevel` data includes the `maxSessionExtensions` field.\n\nThe `maxSessionExtensions` value indicates the maximum number of times an application can extend its session before the platform forces termination. Once this limit is reached, further `PLATFORM_APPLICATIONS_EXTEND_SESSION_REQUEST` directives will be denied.\n\n**What is validated:**\n- `cuss2.environment.maxSessionExtensions` is a number (if present)\n\n**Prerequisites:**\n- Platform must have completed initialization and provided environment data",
       test: function () {
@@ -53,6 +54,7 @@ export const sessionExtensionSuite = {
     {
       name:
         "it should return WRONG_APPLICATION_STATE if extend requested before SESSION_TIMEOUT",
+      requiredTests: ["active.0"],
       description:
         "Sends a `PLATFORM_APPLICATIONS_EXTEND_SESSION_REQUEST` before the `SESSION_TIMEOUT` unsolicited message has been received.\n\nSession extension requests are only valid during the kill timer window that begins after `SESSION_TIMEOUT` is received. If an application attempts to extend the session while the session timer is still running (i.e., before timeout), the platform must reject it with `WRONG_APPLICATION_STATE`.\n\n**What is validated:**\n- The extension request throws an error containing `WRONG_APPLICATION_STATE`\n\n**Prerequisites:**\n- Platform must be in the ACTIVE state\n- The `sessionTimeout` timer must still be running (no `SESSION_TIMEOUT` received yet)",
       test: async function () {
@@ -76,6 +78,7 @@ export const sessionExtensionSuite = {
     },
     {
       name: "it should receive SESSION_TIMEOUT when session expires",
+      requiredTests: ["active.0"],
       description:
         "Documents the expected behavior when the `sessionTimeout` timer expires.\n\nWhen an application has been in the ACTIVE state for the duration specified by `sessionTimeout` (from `EnvironmentLevel`), the platform sends a `SESSION_TIMEOUT` unsolicited message. This message signals that the kill timer (`killTimeout`) has started. The application must either:\n- Request a session extension via `PLATFORM_APPLICATIONS_EXTEND_SESSION_REQUEST`\n- Complete its transaction and clean up before the kill timer expires\n\n**Expected sequence:**\n- Application enters ACTIVE state, `sessionTimeout` countdown begins\n- After `sessionTimeout` ms, platform sends `SESSION_TIMEOUT` unsolicited message\n- Kill timer (`killTimeout`) begins counting down\n- Application can request extension during this window\n\n**Note:** This test is marked inconclusive as the full timeout flow is validated in the Termination suite.",
       diagram: "sequenceDiagram\n    participant App as Application\n    participant Platform as CUSS2 Platform\n    App->>Platform: requestActiveState()\n    Platform-->>App: OK (ACTIVE)\n    Note over Platform: sessionTimeout countdown starts\n    Platform-->>App: SESSION_TIMEOUT (unsolicited)\n    Note over Platform: killTimeout countdown starts\n    alt Extension requested\n        App->>Platform: EXTEND_SESSION_REQUEST\n        Platform-->>App: granted: true + newSessionExpiry\n        Note over Platform: Session timer resets\n    else No extension\n        Note over Platform: killTimeout expires\n        Platform-->>App: Connection closed (4007)\n    end",
@@ -86,6 +89,7 @@ export const sessionExtensionSuite = {
     },
     {
       name: "it should grant extension when requested during kill timer",
+      requiredTests: ["active.0"],
       description:
         "Documents the expected behavior when a `PLATFORM_APPLICATIONS_EXTEND_SESSION_REQUEST` is sent during the kill timer window.\n\nAfter receiving `SESSION_TIMEOUT`, the application has `killTimeout` milliseconds to request an extension. If the request is within the `maxSessionExtensions` limit, the platform grants the extension.\n\n**Expected behavior:**\n- Application sends `PLATFORM_APPLICATIONS_EXTEND_SESSION_REQUEST` during the kill timer window\n- Platform responds with `granted: true`\n- Response includes `newSessionExpiry` timestamp indicating when the extended session will expire\n- The session timer resets to `sessionExtensionDuration` milliseconds from now\n- The kill timer is cancelled\n\n**Note:** This test is marked inconclusive as it requires waiting for a full session timeout cycle.",
       test: function () {
@@ -95,6 +99,7 @@ export const sessionExtensionSuite = {
     },
     {
       name: "it should deny extension when max extensions reached",
+      requiredTests: ["active.0"],
       description:
         "Documents the expected behavior when the application has exhausted all allowed session extensions.\n\nThe platform tracks how many times an application has extended its session. When the count reaches `maxSessionExtensions` (from `EnvironmentLevel`), further requests are denied.\n\n**Expected behavior:**\n- After requesting `maxSessionExtensions` extensions across multiple timeout cycles, the next `PLATFORM_APPLICATIONS_EXTEND_SESSION_REQUEST` returns `granted: false`\n- The response includes `denialReason: MAX_EXTENSIONS_REACHED`\n- The kill timer continues counting down and the application will be terminated when it expires\n- The application should use the remaining kill timer window to save state and clean up\n\n**Note:** This test is marked inconclusive as it requires multiple session timeout cycles to exhaust the extension limit.",
       test: function () {
@@ -105,6 +110,7 @@ export const sessionExtensionSuite = {
     {
       name:
         "it should terminate application if kill timer expires with no extension",
+      requiredTests: ["active.0"],
       description:
         "Documents the expected behavior when the kill timer expires without a session extension request.\n\nAfter `SESSION_TIMEOUT` is sent, the platform starts the `killTimeout` countdown. If the application does not send a `PLATFORM_APPLICATIONS_EXTEND_SESSION_REQUEST` before this timer expires, the platform forcibly terminates the application.\n\n**Expected behavior:**\n- Platform sends `SESSION_TIMEOUT` after `sessionTimeout` elapses\n- Kill timer (`killTimeout`) begins\n- Application does not request extension\n- Kill timer expires: platform closes the WebSocket connection with close code `4007`\n- All peripheral components are released\n- Application session is terminated\n\n**Note:** This test is marked inconclusive as the full sequence is validated in the Termination suite.",
       test: function () {
@@ -114,6 +120,7 @@ export const sessionExtensionSuite = {
     },
     {
       name: "it should retrieve device help instructions",
+      requiredTests: ["active.0"],
       description:
         "Iterates through the platform's components and checks for `deviceHelpInstructions` data.\n\nCUSS2 components can optionally provide `deviceHelpInstructions` that describe the physical device to the application. This information helps applications provide contextual help to passengers when interacting with peripherals.\n\n**Available help fields:**\n- `deviceDescription` - Human-readable description of the device\n- `deviceLocation` - Physical location of the device on the kiosk (e.g., \"left side\", \"top panel\")\n- `deviceProfile` - Technical profile of the device capabilities\n- `deviceUsage` - Instructions for how to use the device\n\n**What is validated:**\n- Each component's help instructions are logged (if available)\n- The test checks up to 3 components for help data\n\n**Prerequisites:**\n- Platform must have completed initialization with component discovery",
       test: function () {
@@ -136,6 +143,7 @@ export const sessionExtensionSuite = {
     },
     {
       name: "device help should include language code",
+      requiredTests: ["active.0"],
       description:
         "Validates that `deviceHelpInstructions` include a `languageCode` field conforming to ISO 639-1.\n\nThe `languageCode` field indicates the language of the help instruction text (e.g., `en` for English, `fr` for French). This allows multilingual applications to select appropriate help content for the current passenger's language preference.\n\n**What is validated:**\n- If `component.helpInstructions.languageCode` is present, it matches the ISO 639-1 two-letter lowercase pattern (`/^[a-z]{2}$/`)\n- The test checks up to 3 components\n\n**Prerequisites:**\n- Platform must have completed initialization\n- At least one component should provide `deviceHelpInstructions` with a `languageCode`",
       test: function () {

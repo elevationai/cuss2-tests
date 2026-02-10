@@ -13,7 +13,6 @@ export const illuminationSuite = {
   name: "Illumination",
   description:
     "Tests for illumination component including color setting (RGB and predefined), query, and state transition reset.",
-  dependencies: ["active"],
   tests: baseComponentTests(getCuss2, "illumination", () => [
     {
       name: "it should set color via RGB value",
@@ -149,5 +148,5 @@ export const illuminationSuite = {
         await illumination.enable();
       },
     },
-  ]),
+  ], ["active.0"]),
 };

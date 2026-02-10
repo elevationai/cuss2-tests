@@ -26,6 +26,7 @@ export async function promptUser(message, waitFor, options = {}) {
   const $message = $("#promptMessage");
   const $icon = $("#promptIcon");
   const $buttons = $("#promptButtons");
+  const $countdown = $("#promptCountdown");
   const $closeBtn = $modal.find(".prompt-close");
 
   // Set icon if provided
@@ -37,15 +38,34 @@ export async function promptUser(message, waitFor, options = {}) {
   }
 
   // Set message and show modal
-  $message.text(message);
+  $message.html(message);
   $buttons.empty();
+  $countdown.empty();
   $modal.addClass("show");
+
+  // Countdown timer
+  let countdownInterval = null;
+  if (options.countdown > 0) {
+    const endTime = Date.now() + options.countdown;
+    const updateCountdown = () => {
+      const remaining = Math.max(0, endTime - Date.now());
+      const totalSeconds = Math.ceil(remaining / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      $countdown.text(`${minutes}:${String(seconds).padStart(2, "0")}`);
+      if (remaining <= 0) clearInterval(countdownInterval);
+    };
+    updateCountdown();
+    countdownInterval = setInterval(updateCountdown, 1000);
+  }
 
   // Cleanup function
   const cleanup = () => {
     promptActive = false;
+    if (countdownInterval) clearInterval(countdownInterval);
     $modal.removeClass("show");
     $buttons.empty();
+    $countdown.empty();
     $closeBtn.off("click", cancelHandler);
   };
 
@@ -67,11 +87,14 @@ export async function promptUser(message, waitFor, options = {}) {
     rejectCancelled = reject;
   });
 
+  // AbortController for cleaning up waitFor listeners
+  const abortController = new AbortController();
+
   // Build race candidates
   const raceCandidates = [cancelledPromise];
 
   if (waitFor) {
-    raceCandidates.push(waitFor());
+    raceCandidates.push(waitFor(abortController.signal));
   }
 
   // Render buttons if provided
@@ -91,6 +114,7 @@ export async function promptUser(message, waitFor, options = {}) {
     const result = await Promise.race(raceCandidates);
     return result;
   } finally {
+    abortController.abort();
     cleanup();
   }
 }

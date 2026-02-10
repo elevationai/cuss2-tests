@@ -25,6 +25,14 @@
       <div class="main-content">
         <!-- Left Panel - Test List -->
         <aside class="test-panel">
+          <div class="selection-bar" id="selectionBar">
+            <span class="selection-count" id="selectionCount"></span>
+            <div class="selection-bar-actions">
+              <button class="btn-clear" id="collapseAll" title="Collapse all">&#9650;</button>
+              <button class="btn-clear" id="expandAll" title="Expand all">&#9660;</button>
+              <button class="btn-clear" id="clearSelection">Clear</button>
+            </div>
+          </div>
           <div class="test-tree" id="testTree">
             <!-- Tests will be dynamically loaded here -->
           </div>
@@ -52,6 +60,7 @@
         <div class="prompt-icon" id="promptIcon"></div>
         <div class="prompt-message" id="promptMessage"></div>
         <div class="prompt-buttons" id="promptButtons"></div>
+        <div class="prompt-countdown" id="promptCountdown"></div>
       </div>
     </div>
 

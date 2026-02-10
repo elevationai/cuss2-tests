@@ -11,11 +11,67 @@ import { log, promptUser, validateUnsolicitedMessage } from "../helpers.js";
  * @param {function} getCuss2 - Function that returns the cuss2 instance
  * @param {string} componentName - The property name on cuss2 (e.g., 'barcodeReader')
  * @param {function} [additionalTests] - Optional callback returning array of component-specific tests
+ * @param {array} [requiredTests] - Cross-suite requiredTests applied to all generated tests
  * @returns {array} Array of test objects
  */
-export function baseComponentTests(getCuss2, componentName, additionalTests) {
+export function baseComponentTests(getCuss2, componentName, additionalTests, requiredTests) {
   const getComponent = () => getCuss2()[componentName];
   const reason = `No ${componentName} component available`;
+
+  const disconnectTest = {
+    name: "it should report NOT_REACHABLE when the device is disconnected",
+    description:
+      `Tests that the platform sends an unsolicited status message when the **${componentName}** hardware is physically disconnected.\n\nWhen a peripheral is disconnected, the platform must send an unsolicited \`PLATFORM_DATA\` message with \`meta.currentComponentState.componentState\` set to \`"UNAVAILABLE"\` or \`meta.messageCode\` set to \`"NOT_REACHABLE"\`. The message must also include a valid \`meta.eventClassification\` with \`eventMode: "UNSOLICITED"\`.\n\n**How it is tested:**\n- The user is prompted to physically disconnect the ${componentName} device\n- The test listens for a \`message\` event on the component\n- If the component is already \`NOT_REACHABLE\`, it resolves immediately\n\n**What is validated:**\n- \`component.status\` equals \`"NOT_REACHABLE"\` after the disconnection\n- The unsolicited message passes \`validateUnsolicitedMessage()\` which checks for \`meta.eventClassification\`\n\n**Prerequisites:**\n- Component must exist and be physically connected at test start`,
+    diagram: `sequenceDiagram
+    participant User
+    participant HW as ${componentName} Hardware
+    participant Platform as CUSS2 Platform
+    participant App as Test Application
+
+    User->>HW: Physically disconnect device
+    HW--xPlatform: Connection lost
+    Platform->>App: Unsolicited PLATFORM_DATA
+    Note right of App: meta.messageCode = "NOT_REACHABLE"
+    Note right of App: meta.currentComponentState.componentState = "UNAVAILABLE"
+    Note right of App: meta.eventClassification.eventMode = "UNSOLICITED"
+    App->>App: Validate component.status === "NOT_REACHABLE"`,
+    test: async function () {
+      const component = getComponent();
+      if (!component) {
+        this.result = { status: "inconclusive", reason };
+        return;
+      }
+      const result = await promptUser(
+        `Disconnect the ${componentName}`,
+        (signal) =>
+          new Promise((resolve) => {
+            if (component.status === "NOT_REACHABLE") {
+              resolve({ status: "NOT_REACHABLE" });
+              return;
+            }
+            const messageHandler = (message) => {
+              if (
+                message.meta?.currentComponentState?.componentState ===
+                  "UNAVAILABLE" ||
+                message.meta?.messageCode === "NOT_REACHABLE"
+              ) {
+                component.off("message", messageHandler);
+                resolve({ status: "NOT_REACHABLE", message });
+              }
+            };
+            component.on("message", messageHandler);
+            signal?.addEventListener("abort", () => component.off("message", messageHandler));
+          }),
+        { icon: "unplug" },
+      );
+      expect(component.status).to.equal("NOT_REACHABLE");
+      log(`${componentName} reported NOT_REACHABLE`);
+
+      if (result.message) {
+        validateUnsolicitedMessage(result.message);
+      }
+    },
+  };
 
   const tests = [
     {
@@ -53,61 +109,34 @@ export function baseComponentTests(getCuss2, componentName, additionalTests) {
         log("Received expected OUT_OF_SEQUENCE response");
       },
     },
+    disconnectTest,
     {
-      name: "it should report NOT_REACHABLE when the device is disconnected",
+      name: "it should return HARDWARE_ERROR when enabling an unavailable component",
+      requiredTests: [...(requiredTests || []), ".2"],
       description:
-        `Tests that the platform sends an unsolicited status message when the **${componentName}** hardware is physically disconnected.\n\nWhen a peripheral is disconnected, the platform must send an unsolicited \`PLATFORM_DATA\` message with \`meta.currentComponentState.componentState\` set to \`"UNAVAILABLE"\` or \`meta.messageCode\` set to \`"NOT_REACHABLE"\`. The message must also include a valid \`meta.eventClassification\` with \`eventMode: "UNSOLICITED"\`.\n\n**How it is tested:**\n- The user is prompted to physically disconnect the ${componentName} device\n- The test listens for a \`message\` event on the component\n- If the component is already \`NOT_REACHABLE\`, it resolves immediately\n\n**What is validated:**\n- \`component.status\` equals \`"NOT_REACHABLE"\` after the disconnection\n- The unsolicited message passes \`validateUnsolicitedMessage()\` which checks for \`meta.eventClassification\`\n\n**Prerequisites:**\n- Component must exist and be physically connected at test start`,
-      diagram: `sequenceDiagram
-    participant User
-    participant HW as ${componentName} Hardware
-    participant Platform as CUSS2 Platform
-    participant App as Test Application
-
-    User->>HW: Physically disconnect device
-    HW--xPlatform: Connection lost
-    Platform->>App: Unsolicited PLATFORM_DATA
-    Note right of App: meta.messageCode = "NOT_REACHABLE"
-    Note right of App: meta.currentComponentState.componentState = "UNAVAILABLE"
-    Note right of App: meta.eventClassification.eventMode = "UNSOLICITED"
-    App->>App: Validate component.status === "NOT_REACHABLE"`,
+        `Attempts to enable the **${componentName}** component while it is in a \`NOT_REACHABLE\` state (hardware disconnected).\n\nPer the CUSS2 protocol, enabling a component that is physically unavailable must be rejected by the platform with a \`HARDWARE_ERROR\` response.\n\n**How it is tested:**\n- The component must already be in \`NOT_REACHABLE\` state from the previous disconnection test\n- Calls \`component.enable()\` which sends a \`PERIPHERALS_ENABLE\` message\n\n**What is validated:**\n- \`response.meta.messageCode\` equals \`"HARDWARE_ERROR"\`\n- The platform correctly rejects the enable request for unavailable hardware\n\n**Prerequisites:**\n- Component must be in \`NOT_REACHABLE\` state`,
       test: async function () {
+        if (disconnectTest.skipped) {
+          this.result = { status: "inconclusive", reason: "Disconnect test was skipped" };
+          return;
+        }
         const component = getComponent();
         if (!component) {
           this.result = { status: "inconclusive", reason };
           return;
         }
-        const result = await promptUser(
-          `Disconnect the ${componentName}`,
-          () =>
-            new Promise((resolve) => {
-              if (component.status === "NOT_REACHABLE") {
-                resolve({ status: "NOT_REACHABLE" });
-                return;
-              }
-              const messageHandler = (message) => {
-                if (
-                  message.meta?.currentComponentState?.componentState ===
-                    "UNAVAILABLE" ||
-                  message.meta?.messageCode === "NOT_REACHABLE"
-                ) {
-                  component.off("message", messageHandler);
-                  resolve({ status: "NOT_REACHABLE", message });
-                }
-              };
-              component.on("message", messageHandler);
-            }),
-          { icon: "unplug" },
-        );
-        expect(component.status).to.equal("NOT_REACHABLE");
-        log(`${componentName} reported NOT_REACHABLE`);
-
-        if (result.message) {
-          validateUnsolicitedMessage(result.message);
+        try {
+          const response = await component.enable();
+          expect(response.meta.messageCode).to.equal("HARDWARE_ERROR");
+        } catch (error) {
+          expect(error.message || String(error)).to.include("HARDWARE_ERROR");
         }
+        log("Received expected HARDWARE_ERROR response");
       },
     },
     {
       name: "it should report OK when the device is reconnected",
+      requiredTests: [...(requiredTests || []), ".2"],
       description:
         `Tests that the platform detects hardware reconnection and restores the **${componentName}** component to a healthy state.\n\nAfter a device is physically reconnected, the platform should send an unsolicited message updating \`meta.currentComponentState.componentState\` back to a healthy state. The client library translates this into a \`statusChange\` event.\n\n**How it is tested:**\n- The user is prompted to physically reconnect the ${componentName} device\n- The test listens for a \`statusChange\` event on the component with a value of \`"OK"\`\n- If the component is already \`OK\`, it resolves immediately\n\n**What is validated:**\n- \`component.status\` equals \`"OK"\` after reconnection\n- The platform successfully re-establishes communication with the hardware\n\n**Prerequisites:**\n- Component must be in \`NOT_REACHABLE\` state from the previous disconnection test`,
       diagram: `sequenceDiagram
@@ -123,6 +152,10 @@ export function baseComponentTests(getCuss2, componentName, additionalTests) {
     App->>App: statusChange event fires with "OK"
     App->>App: Validate component.status === "OK"`,
       test: async function () {
+        if (disconnectTest.skipped) {
+          this.result = { status: "inconclusive", reason: "Disconnect test was skipped" };
+          return;
+        }
         const component = getComponent();
         if (!component) {
           this.result = { status: "inconclusive", reason };
@@ -130,7 +163,7 @@ export function baseComponentTests(getCuss2, componentName, additionalTests) {
         }
         await promptUser(
           `Reconnect the ${componentName}`,
-          () =>
+          (signal) =>
             new Promise((resolve) => {
               if (component.status === "OK") {
                 resolve();
@@ -143,6 +176,7 @@ export function baseComponentTests(getCuss2, componentName, additionalTests) {
                 }
               };
               component.on("statusChange", handler);
+              signal?.addEventListener("abort", () => component.off("statusChange", handler));
             }),
           { icon: "plug" },
         );
@@ -168,17 +202,34 @@ export function baseComponentTests(getCuss2, componentName, additionalTests) {
     },
   ];
 
-  // Insert additional component-specific tests before disable
+  // Insert additional component-specific tests
   if (additionalTests) {
-    const extraTests = additionalTests();
-    if (extraTests && extraTests.length > 0) {
-      tests.push(...extraTests);
+    const result = additionalTests();
+    if (result) {
+      // Support { beforeEnable: [...], tests: [...] } or plain array
+      const before = Array.isArray(result) ? null : result.beforeEnable;
+      const after = Array.isArray(result) ? result : result.tests;
+      if (before?.length) {
+        // Insert before the enable test (last item in tests array)
+        tests.splice(tests.length - 1, 0, ...before);
+      }
+      if (after?.length) {
+        tests.push(...after);
+      }
     }
+  }
+
+  // Apply requiredTests to all tests (base + additional) that don't already have them
+  if (requiredTests) {
+    tests.forEach((t) => {
+      if (!t.requiredTests) t.requiredTests = requiredTests;
+    });
   }
 
   // Add disable test at the end
   tests.push({
     name: "it should disable",
+    requiredTests,
     description:
       `Sends a \`PERIPHERALS_DISABLE\` directive to deactivate the **${componentName}** component.\n\nDisabling a component tells the platform to stop forwarding unsolicited data events and release the hardware for other applications. After disabling, the component will no longer report scans, media changes, or other input events.\n\n**How it is tested:**\n- Calls \`component.disable()\` which sends a \`PERIPHERALS_DISABLE\` message\n- Awaits the platform's solicited response\n\n**What is validated:**\n- \`response.meta.messageCode\` equals \`"OK"\` (disable was accepted)\n- \`component.enabled\` is \`false\` (client state updated)\n\n**Prerequisites:**\n- Component must currently be in the enabled state`,
     test: async function () {

@@ -12,10 +12,10 @@ export const concurrentDirectivesSuite = {
   name: "Concurrent Directives",
   description:
     "Tests for handling multiple directives sent in quick succession and verifying correct response correlation.",
-  dependencies: ["active"],
   tests: [
     {
       name: "it should handle multiple directives sent in quick succession",
+      requiredTests: ["active.0"],
       description:
         "Validates that the platform can process multiple `PERIPHERALS_QUERY` directives sent concurrently over the same WebSocket connection.\n\n**How it works:**\n- Selects up to 3 components from the component list\n- Sends `PERIPHERALS_QUERY` to each component simultaneously using `Promise.all`\n- Asserts all responses arrive successfully\n\n**What is validated:**\n- All responses have `meta.messageCode` equal to `OK`\n- Each response has a valid `meta.requestID`\n- The platform does not serialize or drop concurrent directives\n\n**Protocol detail:** Each directive includes a unique `meta.requestID` (UUID). The platform must return each response with the matching `meta.requestID` so the client can correlate responses to requests regardless of arrival order.",
       diagram: "sequenceDiagram\n  participant App\n  participant Platform\n  App->>Platform: PERIPHERALS_QUERY (reqID=A)\n  App->>Platform: PERIPHERALS_QUERY (reqID=B)\n  App->>Platform: PERIPHERALS_QUERY (reqID=C)\n  Platform-->>App: Response (reqID=B)\n  Platform-->>App: Response (reqID=A)\n  Platform-->>App: Response (reqID=C)\n  Note over App: Responses may arrive in any order",
@@ -50,6 +50,7 @@ export const concurrentDirectivesSuite = {
     },
     {
       name: "it should not block on one directive while processing another",
+      requiredTests: ["active.0"],
       description:
         "Validates that the platform does not serialize directive processing, meaning a fast directive should not be blocked by a slower one.\n\n**How it works:**\n- Sends `PERIPHERALS_ENABLE` to the barcode reader (potentially slower due to hardware initialization)\n- Immediately sends `PERIPHERALS_QUERY` to another component (fast metadata lookup)\n- Measures completion time of both operations\n- Disables the reader after both complete\n\n**What is validated:**\n- Both `meta.messageCode` values are `OK`\n- The query response is not delayed by the enable operation\n- The platform processes directives independently rather than in a strict FIFO queue\n\n**Prerequisites:**\n- `ACTIVE` state\n- A barcode reader and at least one other component must be available",
       test: async function () {
@@ -91,6 +92,7 @@ export const concurrentDirectivesSuite = {
     },
     {
       name: "responses should correlate to correct requestIDs",
+      requiredTests: ["active.0"],
       description:
         "Validates that each platform response contains a `meta.requestID` that is unique and correctly correlates to the originating directive.\n\n**How it works:**\n- Selects up to 5 components from the component list\n- Sends `PERIPHERALS_QUERY` to each simultaneously\n- Collects all `meta.requestID` values from responses into a Set\n- Asserts no duplicate `meta.requestID` values exist\n\n**What is validated:**\n- Each response has a non-empty `meta.requestID`\n- Each response has `meta.messageCode` equal to `OK`\n- All `meta.requestID` values are unique across responses\n- The total number of unique IDs equals the number of requests sent\n\n**Why this matters:** The CUSS2 protocol uses `meta.requestID` as the sole correlation mechanism between directives and responses. If the platform returns duplicate or incorrect `meta.requestID` values, the client SDK cannot match responses to their originating requests.",
       test: async function () {

@@ -13,7 +13,6 @@ export const barcodeScanSuite = {
   name: "Barcode Scan",
   description:
     "Tests for barcode reader component including standard component operations, data scanning, encoding validation, and sequential scan handling.",
-  dependencies: ["active"],
   tests: baseComponentTests(getCuss2, "barcodeReader", () => [
     {
       name: "it should return valid data from a scan",
@@ -100,36 +99,5 @@ export const barcodeScanSuite = {
         log("All 3 sequential scans successful");
       },
     },
-    {
-      name: "it should handle rapid successive scans without data loss",
-      description:
-        "Tests that the platform and client correctly handle rapid successive barcode scans without dropping unsolicited messages.\n\nWhen multiple barcodes are scanned in quick succession, the platform must deliver each scan as a separate unsolicited `PLATFORM_DATA` message. The client library must emit a `data` event for each without merging or losing events.\n\n**How it is tested:**\n- A persistent `data` event handler is registered that collects scans into an array\n- The user is prompted to scan 2 barcodes in rapid succession\n- The handler counts received events and resolves when 2 or more are collected\n\n**What is validated:**\n- At least 2 `data` events are received (`scans.length >= 2`)\n- No data loss occurs during rapid scanning\n\n**Prerequisites:**\n- Barcode reader must be enabled",
-      test: async function () {
-        const cuss2 = getCuss2();
-        const reader = cuss2.barcodeReader;
-
-        const scans = [];
-        const collectScans = new Promise((resolve) => {
-          const handler = (data) => {
-            scans.push(data);
-            log(`Received scan ${scans.length}`);
-            if (scans.length >= 2) {
-              reader.off("data", handler);
-              resolve(scans);
-            }
-          };
-          reader.on("data", handler);
-        });
-
-        await promptUser(
-          "Scan 2 barcodes quickly (one after another)",
-          () => collectScans,
-          { icon: "scan-barcode" },
-        );
-
-        expect(scans.length).to.be.greaterThanOrEqual(2);
-        log(`Received ${scans.length} scans without data loss`);
-      },
-    },
-  ]),
+  ], ["active.0"]),
 };

@@ -183,6 +183,7 @@ $(document).ready(async function () {
   loadCheckedStates();
   renderTestTree();
   updateLockedCheckboxes();
+  updateSelectionCount();
   bindEventHandlers();
 
   // Pre-render any mermaid diagrams in tooltips
@@ -389,6 +390,23 @@ function bindEventHandlers() {
     $tooltip.removeClass("visible");
   }, true);
 
+  // Clear selection button
+  $("#clearSelection").on("click", clearSelection);
+
+  // Collapse/expand all
+  $("#collapseAll").on("click", function () {
+    $(".test-item-container.has-children").addClass("collapsed");
+  });
+  $("#expandAll").on("click", function () {
+    $(".test-item-container.has-children").removeClass("collapsed");
+  });
+
+  // Track modifier keys on checkbox clicks (fires before change event)
+  let lastClickHadModifier = false;
+  $(document).on("click", '.test-item input[type="checkbox"]', function (e) {
+    lastClickHadModifier = e.metaKey || e.ctrlKey || e.shiftKey;
+  });
+
   // Test item checkbox change
   $(document).on("change", '.test-item input[type="checkbox"]', function () {
     const $item = $(this).closest(".test-item");
@@ -400,6 +418,20 @@ function bindEventHandlers() {
     if (testId.includes(".")) {
       $item.toggleClass("skipped", !checked);
     }
+
+    // CMD/Ctrl/Shift + click on a suite: toggle all individual tests
+    if (!testId.includes(".") && lastClickHadModifier) {
+      const suite = findTest(testId);
+      const $container = $(this).closest(".test-item-container");
+      $container.find(".test-checkbox").prop("checked", checked).each(function () {
+        $(this).closest(".test-item").toggleClass("skipped", !checked);
+      });
+      if (suite?.tests) {
+        suite.tests.forEach((test) => { test.skipped = !checked; });
+      }
+      saveCheckedStates();
+    }
+    lastClickHadModifier = false;
   });
 
   // Test item selection
@@ -431,29 +463,6 @@ function bindEventHandlers() {
     const $suiteHeader = $(`.test-suite-header[data-suite-id="${suiteId}"]`);
     if ($suiteHeader.length) {
       $suiteHeader[0].scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  });
-
-  // Scroll sync: highlight left panel item based on visible suite in right panel
-  $(".results-panel").on("scroll", function () {
-    const $headers = $(".test-suite-header");
-    if ($headers.length === 0) return;
-
-    const panelTop = $(this).offset().top;
-    let visibleSuiteId = null;
-
-    // Find the suite header that's closest to the top of the visible area
-    $headers.each(function () {
-      const headerTop = $(this).offset().top - panelTop;
-      if (headerTop <= 50) {
-        visibleSuiteId = $(this).data("suite-id");
-      }
-    });
-
-    if (visibleSuiteId) {
-      $(".test-item").removeClass("selected");
-      $(`.test-item[data-test-id="${visibleSuiteId}"]`).addClass("selected");
-      appState.selectedTest = visibleSuiteId;
     }
   });
 
@@ -634,6 +643,8 @@ function updateTestState(testId, checked) {
         test.skipped = !checked;
       }
     }
+    // Recalculate — toggling a test may change which dependencies are needed
+    updateLockedCheckboxes();
   } else {
     // Suite - track in checkedTests
     if (checked) {
@@ -643,6 +654,7 @@ function updateTestState(testId, checked) {
     }
     // Recalculate and update locked dependencies
     updateLockedCheckboxes();
+    updateSelectionCount();
   }
 
   saveCheckedStates();
@@ -656,57 +668,103 @@ function findTest(testId) {
 }
 
 /**
- * Recursively collect all dependencies of a test suite
+ * Recursively collect required tests starting from a test ID.
+ * Follows each test's requiredTests transitively.
  */
-function collectDependencies(testId, collected = new Set()) {
-  const test = findTest(testId);
-  if (!test || !test.dependencies) return collected;
+function collectRequiredTests(testId, collected = new Set()) {
+  if (collected.has(testId)) return collected;
+  collected.add(testId);
 
-  for (const depId of test.dependencies) {
-    if (!collected.has(depId)) {
-      collected.add(depId);
-      collectDependencies(depId, collected);
-    }
+  const dotIndex = testId.lastIndexOf(".");
+  const suiteId = testId.substring(0, dotIndex);
+  const testIndex = parseInt(testId.substring(dotIndex + 1), 10);
+
+  const suite = findTest(suiteId);
+  const test = suite?.tests?.[testIndex];
+  if (!test?.requiredTests) return collected;
+
+  for (const reqId of test.requiredTests) {
+    // Resolve relative refs (e.g. ".2" -> "barcode-scan.2")
+    const resolved = reqId.startsWith(".") ? suiteId + reqId : reqId;
+    collectRequiredTests(resolved, collected);
   }
+
   return collected;
 }
 
 /**
- * Calculate which suites should be locked (can't be unchecked) because
- * they are dependencies of currently checked suites
+ * Calculate which suites and individual tests should be locked.
+ * Iterates non-skipped tests in checked suites, collects their
+ * requiredTests transitively, and derives locked suites from the results.
  */
 function calculateLockedDependencies() {
-  const locked = new Set();
+  const lockedTests = new Set();
+  const lockedSuites = new Set();
 
   for (const checkedId of appState.checkedTests) {
-    const deps = collectDependencies(checkedId);
-    for (const depId of deps) {
-      // Don't lock a suite as its own dependency
-      if (depId !== checkedId) {
-        locked.add(depId);
+    const suite = findTest(checkedId);
+    if (!suite?.tests) continue;
+
+    // Skip if every test in this suite is skipped
+    if (suite.tests.every((t) => t.skipped)) continue;
+
+    for (let i = 0; i < suite.tests.length; i++) {
+      const test = suite.tests[i];
+      if (test.skipped) continue;
+
+      if (test.requiredTests) {
+        for (const reqId of test.requiredTests) {
+          const resolved = reqId.startsWith(".") ? checkedId + reqId : reqId;
+          const before = lockedTests.size;
+          collectRequiredTests(resolved, lockedTests);
+          // Lock suites for any newly collected tests in a different suite
+          if (lockedTests.size > before) {
+            for (const id of lockedTests) {
+              const sid = id.substring(0, id.lastIndexOf("."));
+              if (sid !== checkedId) lockedSuites.add(sid);
+            }
+          }
+        }
       }
     }
   }
 
-  return locked;
+  // Apply intra-suite locks for all suites (even unchecked) so display stays consistent
+  for (const suite of appState.tests) {
+    if (!suite.tests) continue;
+    for (let i = 0; i < suite.tests.length; i++) {
+      const test = suite.tests[i];
+      if (test.skipped) continue;
+      if (test.requiredTests) {
+        for (const reqId of test.requiredTests) {
+          if (reqId.startsWith(".")) {
+            lockedTests.add(suite.id + reqId);
+          }
+        }
+      }
+    }
+  }
+
+  return { lockedSuites, lockedTests };
 }
 
 /**
- * Update the locked state of all suite checkboxes in the UI
+ * Update the locked state of all suite and test checkboxes in the UI.
+ * Locked suites can't be unchecked. Within locked suites, only specific
+ * required tests are locked — other tests remain toggleable.
  */
 function updateLockedCheckboxes() {
-  const lockedIds = calculateLockedDependencies();
+  const { lockedSuites, lockedTests } = calculateLockedDependencies();
 
   appState.tests.forEach((suite) => {
-    // Set locked property directly on the suite object
-    suite.locked = lockedIds.has(suite.id);
+    suite.locked = lockedSuites.has(suite.id);
 
     const $checkbox = $(`#test-${suite.id}`);
     if ($checkbox.length === 0) return;
 
     const isDisabled = appState.disabledTests.has(suite.id);
 
-    // Disable if locked as dependency or disabled
+    // Disable suite checkbox if locked as dependency or disabled
     $checkbox.prop("disabled", suite.locked || isDisabled);
 
     // If locked, ensure it's checked
@@ -714,49 +772,67 @@ function updateLockedCheckboxes() {
       appState.checkedTests.add(suite.id);
       $checkbox.prop("checked", true);
     }
-  });
-}
 
-/**
- * Get all selected test suites with their dependencies
- */
-function getSelectedTests() {
-  const selected = [];
+    // Update individual test checkboxes
+    const $container = $checkbox.closest(".test-item-container");
+    if (suite.tests) {
+      suite.tests.forEach((test, index) => {
+        const testId = `${suite.id}.${index}`;
+        const $testItem = $container.find(`.test-item[data-test-id="${testId}"]`);
+        const $testCheckbox = $testItem.find(".test-checkbox");
+        if ($testCheckbox.length === 0) return;
 
-  // Get directly selected test suites (top-level only)
-  appState.tests.forEach((test) => {
-    const isChecked = appState.checkedTests.has(test.id);
-    const isDisabled = appState.disabledTests.has(test.id);
-    if (isChecked && !isDisabled) {
-      selected.push(test);
+        if (lockedTests.has(testId)) {
+          $testCheckbox.prop("checked", true).prop("disabled", true);
+          $testItem.removeClass("skipped");
+          test.skipped = false;
+        } else {
+          $testCheckbox.prop("disabled", false);
+        }
+      });
     }
   });
-
-  // Add dependencies
-  const withDependencies = new Set();
-  selected.forEach((test) => {
-    addTestWithDependencies(test, withDependencies);
-  });
-
-  return Array.from(withDependencies);
 }
 
 /**
- * Add a test suite and its dependencies to the set
+ * Update the selection count displayed in the sticky header
  */
-function addTestWithDependencies(test, testSet) {
-  // Add dependencies first
-  if (test.dependencies) {
-    test.dependencies.forEach((depId) => {
-      const depTest = findTest(depId);
-      if (depTest && !testSet.has(depTest)) {
-        addTestWithDependencies(depTest, testSet);
-      }
-    });
-  }
+function updateSelectionCount() {
+  const total = appState.tests.length;
+  const checked = appState.tests.filter((t) => appState.checkedTests.has(t.id)).length;
+  $("#selectionCount").text(`${checked} of ${total} suites selected`);
+}
 
-  // Then add the test itself
-  testSet.add(test);
+/**
+ * Clear all suite selections
+ */
+function clearSelection() {
+  appState.checkedTests.clear();
+  appState.tests.forEach((suite) => {
+    $(`#test-${suite.id}`).prop("checked", false);
+    if (suite.tests) {
+      suite.tests.forEach((test) => {
+        test.skipped = true;
+      });
+    }
+  });
+  $(".test-checkbox").prop("checked", false);
+
+  updateLockedCheckboxes();
+  updateSelectionCount();
+  saveCheckedStates();
+}
+
+/**
+ * Get all selected test suites (checked + locked dependencies) in config order.
+ */
+function getSelectedTests() {
+  const { lockedSuites } = calculateLockedDependencies();
+
+  return appState.tests.filter((suite) => {
+    if (appState.disabledTests.has(suite.id)) return false;
+    return lockedSuites.has(suite.id) || appState.checkedTests.has(suite.id);
+  });
 }
 
 /**
@@ -834,6 +910,12 @@ async function runTests() {
  * Returns false if execution should stop
  */
 async function executeTestSuite(testSuite) {
+  // Highlight the running suite in the left panel
+  const $suiteItem = $(`.test-item[data-test-id="${testSuite.id}"]`);
+  $suiteItem.addClass("running");
+  $suiteItem.closest(".test-item-container").removeClass("collapsed");
+  $suiteItem[0]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
   // Run beforeAll hook if it exists
   if (testSuite.beforeAll) {
     console.log("Running beforeAll for:", testSuite.name);
@@ -842,24 +924,37 @@ async function executeTestSuite(testSuite) {
 
   // If the suite has tests, execute each one
   if (testSuite.tests && testSuite.tests.length > 0) {
-    for (const test of testSuite.tests) {
+    for (let i = 0; i < testSuite.tests.length; i++) {
+      const test = testSuite.tests[i];
       if (test.skipped) {
         console.log("Skipping test:", test.name);
         continue;
       }
 
+      // Highlight the running test
+      const testId = `${testSuite.id}.${i}`;
+      const $testItem = $(`.test-item[data-test-id="${testId}"]`);
+      $testItem.addClass("running");
+      $testItem[0]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
       const shouldContinue = await executeTest(testSuite, test);
+
+      $testItem.removeClass("running");
       if (!shouldContinue) {
-        return false; // Stop execution
+        $suiteItem.removeClass("running");
+        return false;
       }
     }
   } else {
     // Suite has no sub-tests, treat it as a single test
     const shouldContinue = await executeTest(testSuite, null);
     if (!shouldContinue) {
+      $suiteItem.removeClass("running");
       return false;
     }
   }
+
+  $suiteItem.removeClass("running");
   return true;
 }
 

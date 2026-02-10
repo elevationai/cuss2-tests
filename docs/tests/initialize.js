@@ -79,6 +79,24 @@ export const initializeSuite = {
       },
     },
     {
+      name: "query should work from INITIALIZE state",
+      timeout: 30000,
+      description:
+        "Sends `PERIPHERALS_QUERY` to all components while the application is in `INITIALIZE` state.\n\n`PERIPHERALS_QUERY` is the only component directive allowed in **all** application states. This verifies the platform accepts it during `INITIALIZE`.\n\n**What is validated:**\n- Every `response.meta.messageCode` equals `OK`",
+      test: async function () {
+        const components = Object.values(cuss2.components);
+        if (components.length === 0) {
+          this.result = { status: "inconclusive", reason: "No components available" };
+          return;
+        }
+        const results = await Promise.all(components.map((c) => c.query()));
+        results.forEach((response, i) => {
+          expect(response.meta.messageCode).to.equal("OK");
+          log(`Component ${components[i].id} (${components[i].deviceType}): status=${components[i].status}`);
+        });
+      },
+    },
+    {
       name: "it should accept setup in INITIALIZE state",
       description:
         "Sends a `PERIPHERALS_SETUP` directive while the application is in the `INITIALIZE` state. The `PERIPHERALS_SETUP` directive configures a component's operational parameters (such as media definitions for printers) and can be issued in any application state.\n\nThis test uses the first available printer component (`boardingPassPrinter` or `bagTagPrinter`) and calls its `setup()` method. The platform should accept the setup request and respond with `meta.messageCode` equal to `\"OK\"`.\n\nIf no printer component is available, the test is marked **inconclusive**.\n\n**Prerequisites:**\n- Application must be in `INITIALIZE` state\n- At least one printer component must be present in the component list",

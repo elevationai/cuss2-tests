@@ -13,7 +13,6 @@ export const btpPrinterSuite = {
   name: "BTP Printer (Bag Tag)",
   description:
     "Tests for bag tag printer including setup, printing, and media status detection.",
-  dependencies: ["active"],
   tests: baseComponentTests(getCuss2, "bagTagPrinter", () => [
     {
       name: "it should accept a setup context for bag tags",
@@ -232,7 +231,7 @@ export const btpPrinterSuite = {
         }
       },
     },
-  ]),
+  ], ["active.0"]),
 };
 
 export const bppPrinterSuite = {
@@ -240,7 +239,6 @@ export const bppPrinterSuite = {
   name: "BPP Printer (Boarding Pass)",
   description:
     "Tests for boarding pass printer including setup, printing, and cancel operations.",
-  dependencies: ["active"],
   tests: baseComponentTests(getCuss2, "boardingPassPrinter", () => [
     {
       name: "it should accept a setup context for boarding passes",
@@ -324,5 +322,5 @@ export const bppPrinterSuite = {
         log(`Cancel response: ${response.meta.messageCode}`);
       },
     },
-  ]),
+  ], ["active.0"]),
 };

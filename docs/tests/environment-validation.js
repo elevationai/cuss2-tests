@@ -19,7 +19,7 @@ export const environmentValidationSuite = {
   name: "Environment Validation",
   description:
     "Validates that the EnvironmentLevel data returned by PLATFORM_ENVIRONMENT contains all required fields with correct formats.",
-  dependencies: ["connect"],
+  dependencies: [],
   beforeEach: async function () {
     const config = getConfig();
     this.conn = Connection.connect(

@@ -29,7 +29,7 @@ export const componentDiscoverySuite = {
   name: "Component Discovery",
   description:
     "Tests the PLATFORM_COMPONENTS directive response and validates component data structure, linked components, and status values.",
-  dependencies: ["connect"],
+  dependencies: [],
   beforeEach: async function () {
     const config = getConfig();
     this.conn = Connection.connect(

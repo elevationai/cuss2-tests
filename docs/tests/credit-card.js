@@ -13,7 +13,6 @@ export const creditCardSuite = {
   name: "Credit Card",
   description:
     "Tests for payment device component including payment initiation, cancellation, and timeout handling.",
-  dependencies: ["active"],
   tests: baseComponentTests(getCuss2, "paymentDevice", () => [
     {
       name: "it should enable the payment device",
@@ -142,5 +141,5 @@ export const creditCardSuite = {
         );
       },
     },
-  ]),
+  ], ["active.0"]),
 };

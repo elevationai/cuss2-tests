@@ -12,10 +12,10 @@ export const stateReverseSuite = {
   name: "State Reverse Transitions",
   description:
     "Tests reverse state transitions (ACTIVE->AVAILABLE->UNAVAILABLE) and edge cases like invalid transitions.",
-  dependencies: ["active"],
   tests: [
     {
       name: "it should transition from ACTIVE back to AVAILABLE",
+      requiredTests: ["active.0"],
       description:
         "Validates the reverse state transition from `ACTIVE` to `AVAILABLE`.\n\n**How it works:**\n- Asserts the current state is `ACTIVE`\n- Sends a state change request to `AVAILABLE`\n- Asserts the state becomes `AVAILABLE`\n- Returns to `ACTIVE` for subsequent tests\n\n**What is validated:**\n- The platform accepts a backward transition from `ACTIVE` to `AVAILABLE`\n- The state change is reflected in the client's `cuss2.state` property\n\n**Protocol context:** Moving from `ACTIVE` to `AVAILABLE` signals the end of a passenger transaction. The platform should disable all enabled components and reset any per-session state established during the `ACTIVE` session.",
       test: async function () {
@@ -33,6 +33,7 @@ export const stateReverseSuite = {
     },
     {
       name: "it should transition from AVAILABLE back to UNAVAILABLE",
+      requiredTests: ["active.0"],
       description:
         "Validates the reverse state transition from `AVAILABLE` to `UNAVAILABLE`.\n\n**How it works:**\n- Transitions to `AVAILABLE` first\n- Sends a state change request to `UNAVAILABLE`\n- Asserts the state becomes `UNAVAILABLE`\n- Returns to `ACTIVE` via `AVAILABLE` -> `ACTIVE`\n\n**What is validated:**\n- The platform accepts a backward transition from `AVAILABLE` to `UNAVAILABLE`\n- The transition signals the application is no longer ready to serve passengers\n\n**Allowed backward transitions:**\n- `ACTIVE` -> `AVAILABLE`\n- `AVAILABLE` -> `UNAVAILABLE`\n- `ACTIVE` -> `UNAVAILABLE` (shortcut, skipping `AVAILABLE`)",
       test: async function () {
@@ -54,6 +55,7 @@ export const stateReverseSuite = {
     },
     {
       name: "it should transition from ACTIVE directly to UNAVAILABLE",
+      requiredTests: ["active.0"],
       description:
         "Validates the shortcut reverse transition from `ACTIVE` directly to `UNAVAILABLE`, bypassing `AVAILABLE`.\n\n**How it works:**\n- Asserts the current state is `ACTIVE`\n- Sends a state change request directly to `UNAVAILABLE`\n- Asserts the state becomes `UNAVAILABLE`\n- Returns to `ACTIVE` via `AVAILABLE` -> `ACTIVE`\n\n**What is validated:**\n- The platform allows skipping the `AVAILABLE` state when transitioning backward\n- This shortcut is valid because backward transitions can skip intermediate states\n\n**Use case:** An application may jump directly from `ACTIVE` to `UNAVAILABLE` when it needs to go offline immediately (e.g., maintenance mode, error recovery) without lingering in `AVAILABLE`.",
       test: async function () {
@@ -73,6 +75,7 @@ export const stateReverseSuite = {
     {
       name:
         "it should round-trip UNAVAILABLE -> AVAILABLE -> ACTIVE -> AVAILABLE -> UNAVAILABLE",
+      requiredTests: ["active.0"],
       description:
         "Performs a full round-trip through the CUSS2 application state machine, verifying each intermediate state.\n\n**How it works:**\n- Transitions to `UNAVAILABLE` (starting point)\n- Walks forward: `UNAVAILABLE` -> `AVAILABLE` -> `ACTIVE`\n- Walks backward: `ACTIVE` -> `AVAILABLE` -> `UNAVAILABLE`\n- Asserts `cuss2.state` at each step\n- Returns to `ACTIVE` for subsequent tests\n\n**What is validated:**\n- Each of the 5 state transitions succeeds\n- The state machine allows a complete forward and backward traversal\n- No state is skipped during the forward progression (forward transitions cannot skip states)\n\n**State machine rules:**\n- **Forward:** Must progress through each state in order (`UNAVAILABLE` -> `AVAILABLE` -> `ACTIVE`)\n- **Backward:** Can skip intermediate states (`ACTIVE` -> `UNAVAILABLE` is valid)",
       diagram: "stateDiagram-v2\n  direction LR\n  [*] --> INITIALIZE\n  INITIALIZE --> UNAVAILABLE\n  UNAVAILABLE --> AVAILABLE\n  AVAILABLE --> ACTIVE\n  ACTIVE --> AVAILABLE\n  AVAILABLE --> UNAVAILABLE\n  ACTIVE --> UNAVAILABLE",
@@ -110,6 +113,7 @@ export const stateReverseSuite = {
     {
       name:
         "it should return WRONG_APPLICATION_STATE when requesting ACTIVE from UNAVAILABLE",
+      requiredTests: ["active.0"],
       description:
         "Validates that the platform rejects an attempt to skip forward from `UNAVAILABLE` directly to `ACTIVE`.\n\n**How it works:**\n- Transitions to `UNAVAILABLE` state\n- Attempts to request `ACTIVE` state directly (skipping `AVAILABLE`)\n- Expects the platform to throw an error containing `WRONG_APPLICATION_STATE`\n- Returns to `ACTIVE` via `AVAILABLE` -> `ACTIVE`\n\n**What is validated:**\n- The error message contains `WRONG_APPLICATION_STATE`\n- The platform enforces the rule that **forward** state transitions cannot skip states\n- `UNAVAILABLE` -> `ACTIVE` is invalid; the correct path is `UNAVAILABLE` -> `AVAILABLE` -> `ACTIVE`\n\n**Key distinction:** While backward transitions allow skipping (e.g., `ACTIVE` -> `UNAVAILABLE`), forward transitions must proceed one step at a time.",
       test: async function () {
@@ -139,6 +143,7 @@ export const stateReverseSuite = {
     {
       name:
         "it should return WRONG_APPLICATION_STATE when requesting ACTIVE from INITIALIZE",
+      requiredTests: ["active.0"],
       description:
         "Documents the expected behavior when requesting `ACTIVE` directly from `INITIALIZE` state.\n\n**Expected behavior:**\n- The platform should return `WRONG_APPLICATION_STATE` because `INITIALIZE` -> `ACTIVE` skips both `UNAVAILABLE` and `AVAILABLE`\n- The required forward path is `INITIALIZE` -> `UNAVAILABLE` -> `AVAILABLE` -> `ACTIVE`\n\n**How it works:**\n- Since the test suite depends on `ACTIVE` state (already past `INITIALIZE`), this test documents the expected behavior\n- Verifies the current state is `ACTIVE` (confirming proper state progression was followed)\n\n**Note:** Fully testing this would require a fresh WebSocket connection that intentionally stays in `INITIALIZE` and attempts to jump to `ACTIVE`. The SDK's initialization flow progresses through states automatically, making this a documentation-only test.",
       // Note: This test is difficult to run in sequence since we're already past INITIALIZE

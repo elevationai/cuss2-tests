@@ -13,10 +13,10 @@ export const setupContextSuite = {
   name: "Setup Context",
   description:
     "Tests for component context setup including display, printer contexts, error handling, and persistence across enable/disable cycles.",
-  dependencies: ["active"],
   tests: [
     {
       name: "it should set up a display context",
+      requiredTests: ["active.0"],
       description:
         "Validates that `PERIPHERALS_SETUP` can configure a DISPLAY component with a valid context payload.\n\n**What is tested:**\n- Locating a component with `deviceType` of `DISPLAY` in the component list\n- Confirming the component exists and is accessible\n\n**Prerequisites:**\n- Application must be in `ACTIVE` state\n- At least one DISPLAY component must be present in the platform's component list\n\nIf no DISPLAY component is discovered, the test is marked **inconclusive**.",
       test: function () {
@@ -37,6 +37,7 @@ export const setupContextSuite = {
     },
     {
       name: "it should set up a printer context (BTP)",
+      requiredTests: ["active.0"],
       description:
         "Sends a `PERIPHERALS_SETUP` directive to configure the bag tag printer (BTP) component.\n\n**How it works:**\n- Enables the BTP via `PERIPHERALS_ENABLE`\n- Calls `setup({})` which sends `PERIPHERALS_SETUP` with an empty context object\n- Asserts `meta.messageCode` is `OK`\n- Disables the BTP via `PERIPHERALS_DISABLE` in the finally block\n\n**What is validated:**\n- The platform accepts a setup directive on the bag tag printer\n- `meta.messageCode` equals `OK` in the response\n\n**Prerequisites:**\n- `ACTIVE` state\n- A bag tag printer component must be available",
       test: async function () {
@@ -67,6 +68,7 @@ export const setupContextSuite = {
     },
     {
       name: "it should set up a printer context (BPP)",
+      requiredTests: ["active.0"],
       description:
         "Sends a `PERIPHERALS_SETUP` directive to configure the boarding pass printer (BPP) component.\n\n**How it works:**\n- Enables the BPP via `PERIPHERALS_ENABLE`\n- Calls `setup({})` which sends `PERIPHERALS_SETUP` with an empty context object\n- Asserts `meta.messageCode` is `OK`\n- Disables the BPP via `PERIPHERALS_DISABLE` in the finally block\n\n**What is validated:**\n- The platform accepts a setup directive on the boarding pass printer\n- `meta.messageCode` equals `OK` in the response\n\n**Prerequisites:**\n- `ACTIVE` state\n- A boarding pass printer component must be available",
       test: async function () {
@@ -96,7 +98,35 @@ export const setupContextSuite = {
       },
     },
     {
+      name: "it should set up a keypad context (DS_TYPES_KEY)",
+      requiredTests: ["active.0"],
+      description:
+        "Sends a `PERIPHERALS_SETUP` directive to configure the keypad with the default `DS_TYPES_KEY` event type.\n\n**How it works:**\n- Calls `setup([{ dsTypes: [\"DS_TYPES_KEY\"], data: \"\" }])` on the disabled keypad\n- Asserts `meta.messageCode` is `OK`\n\n**What is validated:**\n- The platform accepts a setup directive on the keypad\n- `meta.messageCode` equals `OK` in the response\n\n**Prerequisites:**\n- `ACTIVE` state\n- A keypad component must be available and not enabled",
+      test: async function () {
+        const cuss2 = getCuss2();
+
+        const keypad = cuss2.keypad;
+        if (!keypad) {
+          this.result = { status: "inconclusive", reason: "No keypad component available" };
+          return;
+        }
+
+        log(`Found keypad: componentID=${keypad.id}`);
+
+        if (typeof keypad.setup === "function") {
+          const response = await keypad.setup([
+            { dsTypes: ["DS_TYPES_KEY"], data: "" },
+          ]);
+          expect(response.meta.messageCode).to.equal("OK");
+          log("Keypad setup (DS_TYPES_KEY) successful");
+        } else {
+          log("Keypad setup method not available on component");
+        }
+      },
+    },
+    {
       name: "it should return FORMAT_ERROR for invalid setup data",
+      requiredTests: ["active.0"],
       description:
         "Sends `PERIPHERALS_SETUP` with a deliberately malformed context payload and expects the platform to reject it with `FORMAT_ERROR`.\n\n**How it works:**\n- Enables a printer component via `PERIPHERALS_ENABLE`\n- Sends `setup({ invalidContext: { notValid: true } })` which is not a recognized context schema\n- Expects the platform to respond with `meta.messageCode` of `FORMAT_ERROR` or throw an error\n\n**What is validated:**\n- The platform performs schema validation on `PERIPHERALS_SETUP` payloads\n- Invalid context structures are rejected rather than silently accepted\n\n**Prerequisites:**\n- `ACTIVE` state\n- A printer component (BPP or BTP) must be available",
       test: async function () {
@@ -126,6 +156,7 @@ export const setupContextSuite = {
     },
     {
       name: "it should return DATA_MISSING for setup with no context",
+      requiredTests: ["active.0"],
       description:
         "Sends `PERIPHERALS_SETUP` with no context payload at all and expects the platform to reject it with `DATA_MISSING`.\n\n**How it works:**\n- Enables a printer component via `PERIPHERALS_ENABLE`\n- Calls `setup()` with no arguments, resulting in a `PERIPHERALS_SETUP` directive with an empty or missing payload\n- Expects the platform to respond with `meta.messageCode` of `DATA_MISSING` or throw an error\n\n**What is validated:**\n- The platform requires a context payload in `PERIPHERALS_SETUP`\n- Missing data is detected and reported as `DATA_MISSING` rather than causing an internal error\n\n**Prerequisites:**\n- `ACTIVE` state\n- A printer component (BPP or BTP) must be available",
       test: async function () {
@@ -153,6 +184,7 @@ export const setupContextSuite = {
     },
     {
       name: "setup context should persist across enable/disable cycles",
+      requiredTests: ["active.0"],
       description:
         "Verifies that a printer's setup context persists when the component is disabled and re-enabled within the same `ACTIVE` session.\n\n**How it works:**\n- Enables a printer via `PERIPHERALS_ENABLE`\n- Disables it via `PERIPHERALS_DISABLE`\n- Re-enables it via `PERIPHERALS_ENABLE`\n- Sends `PERIPHERALS_QUERY` and asserts `meta.messageCode` is `OK`\n- Disables the printer again\n\n**What is validated:**\n- `PERIPHERALS_QUERY` returns `OK` after a disable/re-enable cycle\n- The platform does not lose the component's previously configured context during enable/disable transitions within the same session\n\n**Prerequisites:**\n- `ACTIVE` state\n- A printer component (BPP or BTP) must be available",
       diagram: "sequenceDiagram\n  participant App\n  participant Platform\n  App->>Platform: PERIPHERALS_ENABLE\n  Platform-->>App: OK\n  App->>Platform: PERIPHERALS_DISABLE\n  Platform-->>App: OK\n  App->>Platform: PERIPHERALS_ENABLE\n  Platform-->>App: OK\n  App->>Platform: PERIPHERALS_QUERY\n  Platform-->>App: OK (context preserved)\n  App->>Platform: PERIPHERALS_DISABLE\n  Platform-->>App: OK",
